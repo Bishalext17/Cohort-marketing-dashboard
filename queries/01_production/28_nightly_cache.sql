@@ -1,104 +1,608 @@
--- ============================================================================
--- 28_nightly_cache.sql
--- Pre-aggregated Nightly Cache Tables and Scheduled Refresh Procedures
--- Speeds up Metabase and Dashboard API requests from 15-50s down to < 500ms
--- ============================================================================
+-- ============================================================
+-- 28 · NIGHTLY CACHE TABLE — the permanent fix for dashboard speed
+--
+-- THE PROBLEM
+--   Overview has 9 cards. Every one runs the full 17-CTE pipeline. Even at 15s
+--   a card that is over two minutes of database work to draw one screen, and
+--   eight of those nine queries compute the same thing to show a single number.
+--
+-- THE FIX
+--   Compute the detail rows ONCE per night for every cohort window, store them,
+--   and point every card at the stored table. Cards go from ~15s to well under
+--   a second, because they become a simple filtered SUM over a small table.
+--
+-- THE TRADE-OFF
+--   Numbers are as fresh as the last refresh. Given Facebook spend already
+--   arrives a day late, this costs nothing real. If someone needs same-hour
+--   figures, keep one live card for them and leave the rest on cache.
+--
+-- RUN ORDER
+--   STEP 1  create the table
+--   STEP 2  create the two procedures
+--   STEP 3  run the full refresh once, by hand, and time it
+--   STEP 4  schedule it nightly
+--   STEP 5  repoint the dashboard cards
+-- ============================================================
 
-CREATE TABLE IF NOT EXISTS cache_cohort_daily_master (
-    capture_date DATE NOT NULL,
-    channel VARCHAR(64),
-    country VARCHAR(16),
-    platform VARCHAR(64),
-    course VARCHAR(128),
-    campaign_id VARCHAR(64),
-    campaign_name VARCHAR(255),
-    adset_id VARCHAR(64),
-    adset_name VARCHAR(255),
-    ad_id VARCHAR(64),
-    ad_name VARCHAR(255),
-    spend DECIMAL(14,2) DEFAULT 0.00,
-    impressions INT DEFAULT 0,
-    clicks INT DEFAULT 0,
-    contacts_registered INT DEFAULT 0,
-    -- Cohort buckets (D0, D1, D2, D3, D7, D14, D21, D30, Till Date)
-    d0_attended INT DEFAULT 0,
-    d0_conversions INT DEFAULT 0,
-    d0_revenue DECIMAL(14,2) DEFAULT 0.00,
-    d3_attended INT DEFAULT 0,
-    d3_conversions INT DEFAULT 0,
-    d3_revenue DECIMAL(14,2) DEFAULT 0.00,
-    d7_attended INT DEFAULT 0,
-    d7_conversions INT DEFAULT 0,
-    d7_revenue DECIMAL(14,2) DEFAULT 0.00,
-    d14_attended INT DEFAULT 0,
-    d14_conversions INT DEFAULT 0,
-    d14_revenue DECIMAL(14,2) DEFAULT 0.00,
-    d30_attended INT DEFAULT 0,
-    d30_conversions INT DEFAULT 0,
-    d30_revenue DECIMAL(14,2) DEFAULT 0.00,
-    till_date_attended INT DEFAULT 0,
-    till_date_conversions INT DEFAULT 0,
-    till_date_revenue DECIMAL(14,2) DEFAULT 0.00,
-    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-    PRIMARY KEY (capture_date, campaign_id, adset_id, ad_id),
-    INDEX idx_cache_date_channel (capture_date, channel, country),
-    INDEX idx_cache_course (course)
+
+-- ============================================================
+-- STEP 1 · THE TABLE
+-- ============================================================
+DROP TABLE IF EXISTS cohort_detail_cache;
+CREATE TABLE cohort_detail_cache (
+    cohort_days                 SMALLINT      NOT NULL,
+    d1                          DATE          NULL,
+    country_code                VARCHAR(10)   NULL,
+    campaign_id                 VARCHAR(64)   NULL,
+    campaign_name               VARCHAR(255)  NULL,
+    ad_name                     VARCHAR(500)  NULL,
+    ads_merged                  INT           NULL,
+    adsets_merged               INT           NULL,
+    sample_ad_id                VARCHAR(64)   NULL,
+    traffic_type                VARCHAR(40)   NULL,
+    contacts_registered         INT           NULL,
+    demos_booked                INT           NULL,
+    demos_booked_attended       INT           NULL,
+    demos_booked_held           INT           NULL,
+    demos_attr_by_id            INT           NULL,
+    demos_scheduled             INT           NULL,
+    demos_attended              INT           NULL,
+    conversions_incl_existing   INT           NULL,
+    conversions_first_time      INT           NULL,
+    conversions_existing_family INT           NULL,
+    conversions_after_demo      INT           NULL,
+    repeat_conversions          INT           NULL,
+    new_units                   INT           NULL,
+    new_revenue                 DECIMAL(18,2) NULL,
+    new_revenue_first_time      DECIMAL(18,2) NULL,
+    repeat_revenue              DECIMAL(18,2) NULL,
+    impressions                 BIGINT        NULL,
+    clicks                      BIGINT        NULL,
+    spend                       DECIMAL(18,2) NULL,
+    fb_results                  BIGINT        NULL,
+    refreshed_at                TIMESTAMP     NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    KEY idx_lookup (cohort_days, d1),
+    KEY idx_campaign (cohort_days, campaign_name),
+    KEY idx_traffic (cohort_days, traffic_type)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
--- Nightly Refresh Procedure
-DELIMITER //
-CREATE PROCEDURE sp_refresh_cohort_cache()
+
+-- ============================================================
+-- STEP 2 · THE REFRESH PROCEDURES
+-- Paste each block separately, including the DELIMITER lines.
+-- ============================================================
+
+DROP PROCEDURE IF EXISTS refresh_cohort_cache_one;
+DELIMITER $$
+CREATE PROCEDURE refresh_cohort_cache_one(IN p_cohort_days INT, IN p_from DATE)
 BEGIN
-    TRUNCATE TABLE cache_cohort_daily_master;
-    
-    INSERT INTO cache_cohort_daily_master (
-        capture_date, channel, country, platform, course,
-        campaign_id, campaign_name, adset_id, adset_name, ad_id, ad_name,
-        spend, impressions, clicks, contacts_registered,
-        d0_attended, d0_conversions, d0_revenue,
-        d3_attended, d3_conversions, d3_revenue,
-        d7_attended, d7_conversions, d7_revenue,
-        d14_attended, d14_conversions, d14_revenue,
-        d30_attended, d30_conversions, d30_revenue,
-        till_date_attended, till_date_conversions, till_date_revenue
+    DELETE FROM cohort_detail_cache WHERE cohort_days = p_cohort_days;
+
+    INSERT INTO cohort_detail_cache (
+        cohort_days, d1, country_code, campaign_id, campaign_name, ad_name,
+        ads_merged, adsets_merged, sample_ad_id, traffic_type,
+        contacts_registered, demos_booked, demos_booked_attended,
+        demos_booked_held, demos_attr_by_id, demos_scheduled, demos_attended,
+        conversions_incl_existing, conversions_first_time,
+        conversions_existing_family, conversions_after_demo,
+        repeat_conversions, new_units, new_revenue, new_revenue_first_time,
+        repeat_revenue, impressions, clicks, spend, fb_results
     )
-    SELECT 
-        s.ad_date, s.channel, s.country, s.platform, COALESCE(s.course_tag, 'Others'),
-        s.campaign_id, s.campaign_name, s.adset_id, s.adset_name, s.ad_id, s.ad_name,
-        SUM(s.spend), SUM(s.impressions), SUM(s.clicks), SUM(s.contacts_registered),
-        -- D0
-        COUNT(DISTINCT CASE WHEN l.attended_day_offset = 0 THEN l.lead_id END),
-        COUNT(DISTINCT CASE WHEN l.converted_day_offset = 0 THEN l.lead_id END),
-        SUM(CASE WHEN l.converted_day_offset = 0 THEN l.revenue ELSE 0 END),
-        -- D3
-        COUNT(DISTINCT CASE WHEN l.attended_day_offset BETWEEN 0 AND 3 THEN l.lead_id END),
-        COUNT(DISTINCT CASE WHEN l.converted_day_offset BETWEEN 0 AND 3 THEN l.lead_id END),
-        SUM(CASE WHEN l.converted_day_offset BETWEEN 0 AND 3 THEN l.revenue ELSE 0 END),
-        -- D7
-        COUNT(DISTINCT CASE WHEN l.attended_day_offset BETWEEN 0 AND 7 THEN l.lead_id END),
-        COUNT(DISTINCT CASE WHEN l.converted_day_offset BETWEEN 0 AND 7 THEN l.lead_id END),
-        SUM(CASE WHEN l.converted_day_offset BETWEEN 0 AND 7 THEN l.revenue ELSE 0 END),
-        -- D14
-        COUNT(DISTINCT CASE WHEN l.attended_day_offset BETWEEN 0 AND 14 THEN l.lead_id END),
-        COUNT(DISTINCT CASE WHEN l.converted_day_offset BETWEEN 0 AND 14 THEN l.lead_id END),
-        SUM(CASE WHEN l.converted_day_offset BETWEEN 0 AND 14 THEN l.revenue ELSE 0 END),
-        -- D30
-        COUNT(DISTINCT CASE WHEN l.attended_day_offset BETWEEN 0 AND 30 THEN l.lead_id END),
-        COUNT(DISTINCT CASE WHEN l.converted_day_offset BETWEEN 0 AND 30 THEN l.lead_id END),
-        SUM(CASE WHEN l.converted_day_offset BETWEEN 0 AND 30 THEN l.revenue ELSE 0 END),
-        -- Till Date
-        COUNT(DISTINCT CASE WHEN l.attended_day_offset >= 0 THEN l.lead_id END),
-        COUNT(DISTINCT CASE WHEN l.converted_day_offset >= 0 THEN l.lead_id END),
-        SUM(CASE WHEN l.converted_day_offset >= 0 THEN l.revenue ELSE 0 END)
-    FROM fact_marketing_spend s
-    LEFT JOIN fact_lead_conversions l 
-      ON s.ad_date = l.capture_date
-     AND s.campaign_id = l.campaign_id
-     AND s.adset_id = l.adset_id
-     AND s.ad_id = l.ad_id
-     AND l.traffic_type LIKE 'Paid%'
-    WHERE s.traffic_type LIKE 'Paid%'
-      AND s.data_status = 'Complete'
-    GROUP BY 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11;
-END //
+WITH
+cohort_leads AS (
+    SELECT lead_key, mobile, capture_date, source_campaign, ad_key,
+           placement, lead_country, window_end
+    FROM (
+        SELECT
+            e.id                                                 AS lead_key,
+            NULLIF(e.phone,'')                                   AS mobile,
+            e.country_code                                       AS lead_country,
+            DATE(e.created_at)                                   AS capture_date,
+            COALESCE(NULLIF(e.utm_campaign,''),'NA')             AS source_campaign,
+            NULLIF(e.utm_content,'')                             AS ad_key,
+            COALESCE(NULLIF(e.utm_placement,''),'Not Available') AS placement,
+            CASE WHEN p_cohort_days >= 9999 THEN CURDATE()
+                 ELSE DATE_ADD(DATE(e.created_at), INTERVAL p_cohort_days DAY)
+            END                                                  AS window_end,
+            ROW_NUMBER() OVER (
+                PARTITION BY COALESCE(NULLIF(e.phone,''), CONCAT('_id:', e.id))
+                ORDER BY e.created_at, e.id)                     AS lrn
+        FROM leads_contact_event_logs e
+        WHERE e.deleted_at IS NULL
+          AND e.event_type = 'contact_submitted'
+          AND e.created_at >= p_from
+          AND e.created_at <  DATE_ADD(CURDATE(), INTERVAL 1 DAY)
+          AND ( p_cohort_days >= 9999
+                OR DATE_ADD(DATE(e.created_at), INTERVAL p_cohort_days DAY) <= CURDATE() )
+    ) t
+    WHERE lrn = 1
+),
+
+lead_by_parent AS (
+    SELECT p.id AS parent_id, cl.capture_date, cl.source_campaign,
+           cl.ad_key, cl.window_end
+    FROM cohort_leads cl
+    JOIN parents p ON p.mobile_number = cl.mobile AND p.deleted_at IS NULL
+),
+
+scoped_parents AS (
+    SELECT DISTINCT parent_id FROM lead_by_parent
+),
+
+book_pool AS (
+    SELECT csb.id AS booking_id, csb.parent_id, csb.leads_contact_utm_id,
+           DATE(csb.created_at) AS booked_date,
+           DATE(cs.class_date)  AS class_date,
+           csb.is_cancelled, csb.attended_class
+    FROM classschedulebookings csb
+    JOIN classschedules cs ON csb.classschedule_id = cs.id AND cs.deleted_at IS NULL
+    JOIN classes c         ON cs.class_id = c.id           AND c.deleted_at IS NULL
+    WHERE csb.deleted_at IS NULL
+      AND csb.demo_class = 'Yes'
+      AND c.category_id <> '31' AND c.is_workshop = 'no'
+      AND c.class_name NOT LIKE '%MOCK DEMO%' AND c.class_name NOT LIKE '%TEACHER NAME%'
+      AND csb.created_at >= p_from
+      AND csb.created_at <  DATE_ADD(CURDATE(), INTERVAL 1 DAY)
+),
+
+sched_pool AS (
+    SELECT csb.id AS booking_id, csb.parent_id, csb.leads_contact_utm_id,
+           DATE(cs.class_date) AS class_date,
+           csb.attended_class
+    FROM classschedulebookings csb
+    JOIN classschedules cs ON csb.classschedule_id = cs.id AND cs.deleted_at IS NULL
+    JOIN classes c         ON cs.class_id = c.id           AND c.deleted_at IS NULL
+    WHERE csb.deleted_at IS NULL
+      AND csb.demo_class = 'Yes' AND csb.is_cancelled = 'No'
+      AND c.category_id <> '31' AND c.is_workshop = 'no'
+      AND c.class_name NOT LIKE '%MOCK DEMO%' AND c.class_name NOT LIKE '%TEACHER NAME%'
+      AND cs.class_date >= p_from
+      AND cs.class_date <  DATE_ADD(CURDATE(), INTERVAL 1 DAY)
+),
+
+book_attr AS (
+    SELECT cl.capture_date, cl.source_campaign, cl.ad_key,
+           bp.booking_id, bp.is_cancelled, bp.attended_class, bp.class_date,
+           1 AS by_id
+    FROM book_pool bp
+    JOIN cohort_leads cl
+           ON cl.lead_key = bp.leads_contact_utm_id
+          AND bp.booked_date BETWEEN cl.capture_date AND cl.window_end
+    UNION ALL
+    SELECT lbp.capture_date, lbp.source_campaign, lbp.ad_key,
+           bp.booking_id, bp.is_cancelled, bp.attended_class, bp.class_date,
+           0 AS by_id
+    FROM book_pool bp
+    LEFT JOIN cohort_leads c2 ON c2.lead_key = bp.leads_contact_utm_id
+    JOIN lead_by_parent lbp
+           ON lbp.parent_id = bp.parent_id
+          AND bp.booked_date BETWEEN lbp.capture_date AND lbp.window_end
+    WHERE c2.lead_key IS NULL          -- anti-join: unstamped, or stamped at a
+),
+
+sched_attr AS (
+    SELECT cl.capture_date, cl.source_campaign, cl.ad_key,
+           sp.booking_id, sp.attended_class
+    FROM sched_pool sp
+    JOIN cohort_leads cl
+           ON cl.lead_key = sp.leads_contact_utm_id
+          AND sp.class_date BETWEEN cl.capture_date AND cl.window_end
+    UNION ALL
+    SELECT lbp.capture_date, lbp.source_campaign, lbp.ad_key,
+           sp.booking_id, sp.attended_class
+    FROM sched_pool sp
+    LEFT JOIN cohort_leads c2 ON c2.lead_key = sp.leads_contact_utm_id
+    JOIN lead_by_parent lbp
+           ON lbp.parent_id = sp.parent_id
+          AND sp.class_date BETWEEN lbp.capture_date AND lbp.window_end
+    WHERE c2.lead_key IS NULL
+),
+
+lead_counts AS (
+    SELECT capture_date, source_campaign, ad_key,
+           COUNT(DISTINCT lead_key) AS leads
+    FROM cohort_leads
+    GROUP BY 1,2,3
+),
+
+Demo_Bookings AS (
+    SELECT capture_date, source_campaign, ad_key,
+        COUNT(DISTINCT CASE WHEN is_cancelled='No' THEN booking_id END)      AS demos_booked,
+        COUNT(DISTINCT booking_id)                                           AS demos_booked_incl_cancelled,
+        COUNT(DISTINCT CASE WHEN is_cancelled='No' AND attended_class='Yes'
+                            THEN booking_id END)                             AS demos_booked_attended,
+        COUNT(DISTINCT CASE WHEN is_cancelled='No' AND class_date <= CURDATE()
+                            THEN booking_id END)                             AS demos_booked_held,
+        COUNT(DISTINCT CASE WHEN by_id = 1 THEN booking_id END)              AS demos_attr_by_id
+    FROM book_attr
+    GROUP BY 1,2,3
+),
+
+Demo_Scheduled AS (
+    SELECT capture_date, source_campaign, ad_key,
+        COUNT(DISTINCT booking_id)                                           AS demos_scheduled,
+        COUNT(DISTINCT CASE WHEN attended_class='Yes' THEN booking_id END)   AS demos_attended
+    FROM sched_attr
+    GROUP BY 1,2,3
+),
+
+prior AS (
+    SELECT i.parent_id, MIN(DATE(i.created_at)) AS first_invoice
+    FROM invoices i
+    JOIN scoped_parents sp ON sp.parent_id = i.parent_id
+    WHERE i.invoice_type = 'regular'
+    GROUP BY 1
+),
+
+attended_pool AS (
+    SELECT DISTINCT csb.parent_id, DATE(cs.class_date) AS attended_date
+    FROM classschedulebookings csb
+    JOIN classschedules cs ON csb.classschedule_id = cs.id AND cs.deleted_at IS NULL
+    JOIN classes c         ON cs.class_id = c.id           AND c.deleted_at IS NULL
+    JOIN scoped_parents sp ON sp.parent_id = csb.parent_id
+    WHERE csb.deleted_at IS NULL
+      AND csb.demo_class='Yes' AND csb.is_cancelled='No' AND csb.attended_class='Yes'
+      AND c.category_id <> '31' AND c.is_workshop='no'
+      AND c.class_name NOT LIKE '%MOCK DEMO%' AND c.class_name NOT LIKE '%TEACHER NAME%'
+      AND cs.class_date >= p_from
+),
+
+Converted AS (
+    SELECT lbp.capture_date, lbp.source_campaign, lbp.ad_key,
+        COUNT(DISTINCT CASE WHEN i.type_of_booking IN ('New','Token')
+                             AND i.invoice_type='regular'
+                            THEN i.parent_id END)                        AS conversions_incl_existing,
+        COUNT(DISTINCT CASE WHEN i.type_of_booking IN ('New','Token')
+                             AND i.invoice_type='regular'
+                             AND pr.parent_id IS NULL
+                            THEN i.parent_id END)                        AS conversions_first_time,
+        COUNT(DISTINCT CASE WHEN i.type_of_booking IN ('New','Token')
+                             AND i.invoice_type='regular'
+                             AND pr.parent_id IS NOT NULL
+                            THEN i.parent_id END)                        AS conversions_existing_family,
+        COUNT(DISTINCT CASE WHEN i.type_of_booking='Repeat' AND i.invoice_type='regular'
+                            THEN i.parent_id END)                        AS repeat_conversions,
+        COUNT(DISTINCT CASE WHEN i.type_of_booking='New' AND i.invoice_type='regular'
+                            THEN i.id END)                               AS new_units,
+        SUM(CASE WHEN i.type_of_booking='New' AND i.invoice_type='regular'
+                 THEN CASE WHEN i.currency='INR' THEN i.amount
+                      ELSE i.amount * 78 / NULLIF(curr.conversion_factor,0) END
+                 ELSE 0 END)                                             AS new_revenue,
+        SUM(CASE WHEN i.type_of_booking='New' AND i.invoice_type='regular'
+                  AND pr.parent_id IS NULL
+                 THEN CASE WHEN i.currency='INR' THEN i.amount
+                      ELSE i.amount * 78 / NULLIF(curr.conversion_factor,0) END
+                 ELSE 0 END)                                             AS new_revenue_first_time,
+        SUM(CASE WHEN i.type_of_booking='Repeat' AND i.invoice_type='regular'
+                 THEN CASE WHEN i.currency='INR' THEN i.amount
+                      ELSE i.amount * 78 / NULLIF(curr.conversion_factor,0) END
+                 ELSE 0 END)                                             AS repeat_revenue
+    FROM lead_by_parent lbp
+    JOIN invoices i ON i.parent_id = lbp.parent_id
+                   AND DATE(i.created_at) BETWEEN lbp.capture_date AND lbp.window_end
+    LEFT JOIN currencies curr ON i.currency = curr.currency
+    LEFT JOIN prior pr ON pr.parent_id = i.parent_id
+                      AND pr.first_invoice < lbp.capture_date
+    WHERE i.type_of_booking IN ('New','Token','Repeat')
+    GROUP BY 1,2,3
+),
+
+conv_after_demo AS (
+    SELECT lbp.capture_date, lbp.source_campaign, lbp.ad_key,
+           COUNT(DISTINCT i.parent_id) AS conversions_after_demo
+    FROM lead_by_parent lbp
+    JOIN invoices i ON i.parent_id = lbp.parent_id
+                   AND DATE(i.created_at) BETWEEN lbp.capture_date AND lbp.window_end
+    LEFT JOIN prior pr ON pr.parent_id = i.parent_id
+                      AND pr.first_invoice < lbp.capture_date
+    JOIN attended_pool ap ON ap.parent_id = lbp.parent_id
+                         AND ap.attended_date BETWEEN lbp.capture_date AND lbp.window_end
+    WHERE i.type_of_booking IN ('New','Token')
+      AND i.invoice_type = 'regular'
+      AND pr.parent_id IS NULL
+    GROUP BY 1,2,3
+),
+
+fb_ad AS (
+    SELECT
+        DATE(a.capture_date)                     AS d1,
+        b.country_code,
+        a.campaign_id, a.campaign_name,
+        COALESCE(a.ad_name,'Not Available')      AS ad_name,
+        COUNT(DISTINCT a.ad_id)                  AS ads_merged,
+        COUNT(DISTINCT a.adset_id)               AS adsets_merged,
+        MIN(a.ad_id)                             AS sample_ad_id,
+        SUM(a.impressions)                       AS impressions,
+        SUM(a.clicks)                            AS clicks,
+        SUM(a.spend)                             AS spend,
+        SUM(a.complete_registration)             AS fb_results
+    FROM facebookads a
+    LEFT JOIN ( SELECT campaign_code, MIN(country_code) AS country_code
+                FROM onlinecampaigns GROUP BY campaign_code ) b
+           ON a.campaign_name = b.campaign_code
+    WHERE a.capture_date >= p_from
+      AND a.capture_date <  DATE_ADD(CURDATE(), INTERVAL 1 DAY)
+      AND ( p_cohort_days >= 9999
+            OR DATE_ADD(DATE(a.capture_date), INTERVAL p_cohort_days DAY) <= CURDATE() )
+    GROUP BY 1,2,3,4,5
+),
+
+campaign_funnel AS (
+    SELECT
+        lc.capture_date AS target_date,
+        lc.source_campaign,
+        lc.ad_key,
+        lc.leads                                      AS contacts_registered,
+        COALESCE(db.demos_booked,0)                   AS demos_booked,
+        COALESCE(db.demos_booked_attended,0)          AS demos_booked_attended,
+        COALESCE(db.demos_booked_held,0)              AS demos_booked_held,
+        COALESCE(db.demos_attr_by_id,0)               AS demos_attr_by_id,
+        COALESCE(ds.demos_scheduled,0)                AS demos_scheduled,
+        COALESCE(ds.demos_attended,0)                 AS demos_attended,
+        COALESCE(cv.conversions_incl_existing,0)      AS conversions_incl_existing,
+        COALESCE(cv.conversions_first_time,0)         AS conversions_first_time,
+        COALESCE(cv.conversions_existing_family,0)    AS conversions_existing_family,
+        COALESCE(cad.conversions_after_demo,0)        AS conversions_after_demo,
+        COALESCE(cv.repeat_conversions,0)             AS repeat_conversions,
+        COALESCE(cv.new_units,0)                      AS new_units,
+        COALESCE(cv.new_revenue,0)                    AS new_revenue,
+        COALESCE(cv.new_revenue_first_time,0)         AS new_revenue_first_time,
+        COALESCE(cv.repeat_revenue,0)                 AS repeat_revenue
+    FROM lead_counts lc
+    LEFT JOIN Demo_Bookings db
+           ON db.capture_date = lc.capture_date
+          AND db.source_campaign = lc.source_campaign
+          AND db.ad_key <=> lc.ad_key
+    LEFT JOIN Demo_Scheduled ds
+           ON ds.capture_date = lc.capture_date
+          AND ds.source_campaign = lc.source_campaign
+          AND ds.ad_key <=> lc.ad_key
+    LEFT JOIN Converted cv
+           ON cv.capture_date = lc.capture_date
+          AND cv.source_campaign = lc.source_campaign
+          AND cv.ad_key <=> lc.ad_key
+    LEFT JOIN conv_after_demo cad
+           ON cad.capture_date = lc.capture_date
+          AND cad.source_campaign = lc.source_campaign
+          AND cad.ad_key <=> lc.ad_key
+),
+
+detail AS (
+    SELECT
+        fb.d1, fb.country_code, fb.campaign_id, fb.campaign_name,
+        fb.ad_name, fb.ads_merged, fb.adsets_merged, fb.sample_ad_id,
+        'Paid · ad matched'                           AS traffic_type,
+        COALESCE(cf.contacts_registered,0)            AS contacts_registered,
+        COALESCE(cf.demos_booked,0)                   AS demos_booked,
+        COALESCE(cf.demos_booked_attended,0)          AS demos_booked_attended,
+        COALESCE(cf.demos_booked_held,0)              AS demos_booked_held,
+        COALESCE(cf.demos_attr_by_id,0)               AS demos_attr_by_id,
+        COALESCE(cf.demos_scheduled,0)                AS demos_scheduled,
+        COALESCE(cf.demos_attended,0)                 AS demos_attended,
+        COALESCE(cf.conversions_incl_existing,0)      AS conversions_incl_existing,
+        COALESCE(cf.conversions_first_time,0)         AS conversions_first_time,
+        COALESCE(cf.conversions_existing_family,0)    AS conversions_existing_family,
+        COALESCE(cf.conversions_after_demo,0)         AS conversions_after_demo,
+        COALESCE(cf.repeat_conversions,0)             AS repeat_conversions,
+        COALESCE(cf.new_units,0)                      AS new_units,
+        COALESCE(cf.new_revenue,0)                    AS new_revenue,
+        COALESCE(cf.new_revenue_first_time,0)         AS new_revenue_first_time,
+        COALESCE(cf.repeat_revenue,0)                 AS repeat_revenue,
+        fb.impressions, fb.clicks, fb.spend, fb.fb_results
+    FROM fb_ad fb
+    LEFT JOIN campaign_funnel cf
+           ON fb.d1            = cf.target_date
+          AND fb.campaign_name = cf.source_campaign
+          AND fb.ad_name       = cf.ad_key
+
+    UNION ALL
+
+    SELECT
+        cf.target_date, NULL, 'Not Available', cf.source_campaign,
+        COALESCE(cf.ad_key,'Not Available'), 0, 0, NULL,
+        CASE WHEN cf.source_campaign = 'NA' THEN 'Untagged · direct/organic'
+             WHEN cf.ad_key IS NULL         THEN 'Paid · campaign only'
+             ELSE 'Paid · ad tag unmatched' END,
+        cf.contacts_registered,
+        cf.demos_booked, cf.demos_booked_attended, cf.demos_booked_held,
+        cf.demos_attr_by_id,
+        cf.demos_scheduled, cf.demos_attended,
+        cf.conversions_incl_existing, cf.conversions_first_time,
+        cf.conversions_existing_family, cf.conversions_after_demo,
+        cf.repeat_conversions, cf.new_units,
+        cf.new_revenue, cf.new_revenue_first_time, cf.repeat_revenue,
+        0, 0, 0, 0
+    FROM campaign_funnel cf
+    LEFT JOIN fb_ad fb
+           ON cf.target_date     = fb.d1
+          AND cf.source_campaign = fb.campaign_name
+          AND cf.ad_key          = fb.ad_name
+    WHERE fb.ad_name IS NULL
+)
+    SELECT
+        p_cohort_days, d.d1, d.country_code, d.campaign_id, d.campaign_name,
+        d.ad_name, d.ads_merged, d.adsets_merged, d.sample_ad_id, d.traffic_type,
+        d.contacts_registered, d.demos_booked, d.demos_booked_attended,
+        d.demos_booked_held, d.demos_attr_by_id, d.demos_scheduled, d.demos_attended,
+        d.conversions_incl_existing, d.conversions_first_time,
+        d.conversions_existing_family, d.conversions_after_demo,
+        d.repeat_conversions, d.new_units, d.new_revenue,
+        d.new_revenue_first_time, d.repeat_revenue,
+        d.impressions, d.clicks, d.spend, d.fb_results
+    FROM detail d;
+END$$
 DELIMITER ;
+
+
+DROP PROCEDURE IF EXISTS refresh_cohort_cache_all;
+DELIMITER $$
+CREATE PROCEDURE refresh_cohort_cache_all(IN p_from DATE)
+BEGIN
+    -- Only windows that can actually return rows. Add 7, 14, 30 as history grows.
+    CALL refresh_cohort_cache_one(0,    p_from);
+    CALL refresh_cohort_cache_one(1,    p_from);
+    CALL refresh_cohort_cache_one(2,    p_from);
+    CALL refresh_cohort_cache_one(3,    p_from);
+    CALL refresh_cohort_cache_one(5,    p_from);
+    CALL refresh_cohort_cache_one(7,    p_from);
+    CALL refresh_cohort_cache_one(14,   p_from);
+    CALL refresh_cohort_cache_one(30,   p_from);
+    CALL refresh_cohort_cache_one(9999, p_from);
+END$$
+DELIMITER ;
+
+
+-- ============================================================
+-- STEP 3 · FIRST RUN — do this by hand and time it
+-- ============================================================
+CALL refresh_cohort_cache_all('2026-08-07');
+
+-- Check what landed:
+SELECT cohort_days, COUNT(*) AS rows_cached,
+       MIN(d1) AS first_date, MAX(d1) AS last_date,
+       MAX(refreshed_at) AS refreshed
+FROM cohort_detail_cache
+GROUP BY 1 ORDER BY 1;
+
+-- RECONCILE before trusting it. This must match the live master query's TOTAL
+-- row for the same cohort_days and date range:
+SELECT SUM(contacts_registered) AS contacts, SUM(demos_booked) AS demos_booked,
+       SUM(conversions_first_time) AS conversions, ROUND(SUM(spend)) AS spend
+FROM cohort_detail_cache
+WHERE cohort_days = 0 AND d1 BETWEEN '2026-08-07' AND '2026-08-07';
+
+
+-- ============================================================
+-- STEP 4 · SCHEDULE IT
+-- Runs at 04:00 daily, after the Facebook spend has landed.
+-- ============================================================
+SET GLOBAL event_scheduler = ON;   -- may need DBA rights; check it stays on
+
+DROP EVENT IF EXISTS ev_refresh_cohort_cache;
+CREATE EVENT ev_refresh_cohort_cache
+ON SCHEDULE EVERY 1 DAY
+STARTS (TIMESTAMP(CURDATE() + INTERVAL 1 DAY, '04:00:00'))
+DO CALL refresh_cohort_cache_all('2026-08-07');
+
+-- Confirm it is registered and enabled:
+-- SHOW EVENTS WHERE Name = 'ev_refresh_cohort_cache';
+--
+-- If the event scheduler is not permitted on your MySQL, run the same CALL from
+-- cron or whatever runs your other nightly jobs. The procedure is the important
+-- part; how it is triggered is not.
+
+
+-- ============================================================
+-- STEP 5 · REPOINT THE CARDS
+--
+-- Every card becomes a simple aggregate over the cache. Sub-second.
+-- Variables stay the same, so the dashboard filters keep working unchanged.
+-- ============================================================
+
+-- 5a · KPI TILES — replaces 24_kpi_unified.sql entirely
+/*
+SELECT
+    ROUND(SUM(spend))                                                AS spend,
+    ROUND(SUM(spend) / NULLIF(SUM(contacts_registered),0))           AS cpl,
+    SUM(contacts_registered)                                         AS contacts_registered,
+    SUM(demos_booked)                                                AS demos_booked,
+    SUM(demos_booked_attended)                                       AS demos_attended,
+    ROUND(100 * SUM(demos_booked_attended)
+              / NULLIF(SUM(demos_booked),0), 1)                      AS att_pct,
+    ROUND(100 * SUM(demos_booked_attended)
+              / NULLIF(SUM(demos_booked_held),0), 1)                 AS att_pct_of_held,
+    SUM(conversions_first_time)                                      AS conversions,
+    ROUND(100 * SUM(conversions_first_time)
+              / NULLIF(SUM(demos_booked_attended),0), 1)             AS conversion_pct,
+    ROUND(SUM(new_revenue_first_time)
+              / NULLIF(SUM(conversions_first_time),0))               AS arpu,
+    ROUND(SUM(new_revenue_first_time) / NULLIF(SUM(spend),0), 2)     AS roas_first_time,
+    ROUND(SUM(new_revenue) / NULLIF(SUM(spend),0), 2)                AS new_revenue_roas,
+    SUM(impressions)                                                 AS impressions,
+    SUM(clicks)                                                      AS clicks,
+    ROUND(100 * SUM(clicks) / NULLIF(SUM(impressions),0), 2)         AS ctr,
+    MAX(refreshed_at)                                                AS data_as_of
+FROM cohort_detail_cache
+WHERE cohort_days = {{cohort_days}}
+  AND d1 BETWEEN {{from_date}} AND {{to_date}}
+  [[AND campaign_name IN ({{campaign_nm}})]]
+  [[AND country_code  IN ({{country_cd}})]]
+  [[AND ad_name       IN ({{ad_nm}})]];
+*/
+
+-- 5b · MASTER DETAIL TABLE
+/*
+SELECT
+    d1 AS lead_capture_period,
+    CASE WHEN {{cohort_days}} >= 9999 THEN 'Till date'
+         ELSE CONCAT('D', {{cohort_days}}) END                       AS cohort_period,
+    traffic_type, campaign_name AS campaign, campaign_id,
+    ad_name AS ad, ads_merged, adsets_merged, sample_ad_id,
+    country_code AS country,
+    ROUND(spend)                                                     AS spend,
+    ROUND(spend / NULLIF(contacts_registered,0))                     AS cpl,
+    contacts_registered, demos_booked, demos_booked_held, demos_booked_attended,
+    ROUND(100 * demos_booked_attended / NULLIF(demos_booked,0), 1)   AS att_pct,
+    conversions_first_time                                           AS conversions,
+    ROUND(100 * conversions_first_time
+              / NULLIF(demos_booked_attended,0), 1)                  AS conversion_pct,
+    ROUND(new_revenue_first_time / NULLIF(conversions_first_time,0)) AS arpu,
+    ROUND(new_revenue)                                               AS new_revenue,
+    ROUND(new_revenue_first_time / NULLIF(spend,0), 2)               AS roas_first_time,
+    impressions, clicks,
+    ROUND(100 * clicks / NULLIF(impressions,0), 2)                   AS ctr,
+    fb_results
+FROM cohort_detail_cache
+WHERE cohort_days = {{cohort_days}}
+  AND d1 BETWEEN {{from_date}} AND {{to_date}}
+  [[AND campaign_name IN ({{campaign_nm}})]]
+  [[AND country_code  IN ({{country_cd}})]]
+ORDER BY d1, spend DESC;
+*/
+
+-- 5c · SLICE-BY
+/*
+SELECT
+    CASE LOWER(TRIM({{slice_1}}))
+        WHEN 'date'     THEN DATE_FORMAT(d1,'%Y-%m-%d')
+        WHEN 'campaign' THEN campaign_name
+        WHEN 'ad'       THEN ad_name
+        WHEN 'country'  THEN COALESCE(country_code,'Unknown')
+    END                                                              AS slice_1,
+    ROUND(SUM(spend))                                                AS spend,
+    ROUND(SUM(spend) / NULLIF(SUM(contacts_registered),0))           AS cpl,
+    SUM(contacts_registered)                                         AS contacts_registered,
+    SUM(demos_booked)                                                AS demos_booked,
+    ROUND(100 * SUM(demos_booked_attended)
+              / NULLIF(SUM(demos_booked),0), 1)                      AS att_pct,
+    SUM(conversions_first_time)                                      AS conversions,
+    ROUND(SUM(new_revenue_first_time) / NULLIF(SUM(spend),0), 2)     AS roas_first_time
+FROM cohort_detail_cache
+WHERE cohort_days = {{cohort_days}}
+  AND d1 BETWEEN {{from_date}} AND {{to_date}}
+GROUP BY 1
+HAVING slice_1 IS NOT NULL
+ORDER BY spend DESC;
+*/
+
+
+-- ============================================================
+-- SHOW PEOPLE HOW FRESH THE DATA IS
+-- The tile query returns data_as_of. Put it on a small card, or in each card's
+-- description. Without it, a stale cache is invisible and someone will act on
+-- yesterday's numbers believing they are live.
+-- ============================================================
+/*
+SELECT MAX(refreshed_at) AS data_as_of,
+       TIMESTAMPDIFF(HOUR, MAX(refreshed_at), NOW()) AS hours_old
+FROM cohort_detail_cache;
+*/
+
+
+-- ============================================================
+-- KEEP THE LIVE QUERIES
+-- Do not delete COHORT_MASTER_OPTIMISED.sql. It stays the definition of truth
+-- and the thing the cache is validated against. Re-run the STEP 3
+-- reconciliation after any change to the logic — if the cache and the live
+-- query disagree, the cache is stale or the procedure was not rebuilt.
+-- ============================================================
