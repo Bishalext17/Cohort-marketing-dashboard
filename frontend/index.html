@@ -1,0 +1,241 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Cohort Marketing Performance — Executive Dashboard</title>
+  <link rel="stylesheet" href="/static/css/styles.css">
+</head>
+<body>
+<div class="wrap">
+
+  <!-- Masthead -->
+  <header class="mast">
+    <div>
+      <h1>Cohort Marketing Performance</h1>
+      <div class="sub">Production analytics engine · Lead-capture cohort progression · Multi-dimensional slicing</div>
+    </div>
+    <div class="header-actions">
+      <div id="dbStatusBadge" class="badge mock">
+        <span class="badge-dot"></span> Analytical Engine Active
+      </div>
+      <div class="stamp">Refresh: <b id="lastUpd">2026-07-31 09:30:00</b></div>
+    </div>
+  </header>
+
+  <!-- Top Navigation Tabs -->
+  <nav class="nav-tabs">
+    <button class="nav-tab active" data-view="viewMaster">📊 Master Cohort & KPIs</button>
+    <button class="nav-tab" data-view="viewFunnels">📉 Funnel & Dimension Visualizer</button>
+    <button class="nav-tab" data-view="viewDiagnostics">📱 iOS vs Android Diagnostic</button>
+    <button class="nav-tab" data-view="viewFollowups">🎯 Actionable Follow-Up Hub</button>
+    <button class="nav-tab" data-view="viewDocumentation">📖 Formula Card & Architecture</button>
+  </nav>
+
+  <!-- ==================== VIEW 1: MASTER COHORT & KPIS ==================== -->
+  <main id="viewMaster" class="view-section">
+    <!-- Filter & Control Panel -->
+    <section class="panel">
+      <div class="panel-hd">
+        <span class="eyebrow">Controls</span>
+        <span style="font-size:11.5px;color:var(--ink3);">Every control is a reactive dropdown. Clear empties a filter — it does not mean all.</span>
+      </div>
+      <div class="panel-bd">
+        <div class="ctrl-row">
+          <span class="lbl">Cohort</span>
+          <div id="segCohort" class="seg"></div>
+          <span class="req">required · defaults to Till date</span>
+        </div>
+        <div class="ctrl-row">
+          <span class="lbl">Lead dates</span>
+          <div id="ddFrom" class="dd-btn" style="cursor:default;">
+            <span class="k">From</span> <span class="v">01 Jul 2026</span>
+          </div>
+          <span class="sep" style="color:var(--ink3);">→</span>
+          <div id="ddTo" class="dd-btn" style="cursor:default;">
+            <span class="k">To</span> <span class="v">31 Jul 2026</span>
+          </div>
+          <span class="lbl" style="margin-left:14px;">Filters</span>
+          <div id="ddChannel"></div>
+          <div id="ddPlatform"></div>
+          <div id="ddCountry"></div>
+          <div id="ddCourse"></div>
+        </div>
+        <div class="ctrl-row">
+          <span class="lbl">Ad hierarchy</span>
+          <div id="ddCampName"></div>
+          <div id="ddCampId"></div>
+          <div id="ddAdsetName"></div>
+          <div id="ddAdsetId"></div>
+          <div id="ddAdName"></div>
+          <div id="ddAdId"></div>
+          <button class="mini" id="resetAll" style="margin-left:auto;font-weight:600;">Reset all filters</button>
+        </div>
+        <div class="ctrl-row">
+          <span class="lbl">Slice by</span>
+          <div id="slicers" style="display:flex;gap:6px;flex-wrap:wrap;"></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Maturity Strip & Notes -->
+    <section class="panel">
+      <div class="panel-hd">
+        <span class="eyebrow">Cohort maturity</span>
+        <span id="matHead" style="font-size:11.5px;color:var(--ink3);"></span>
+      </div>
+      <div class="panel-bd">
+        <div class="mat">
+          <div class="strip">
+            <div class="strip-grid" id="strip"></div>
+            <div class="strip-ax">
+              <span>1 Jul</span>
+              <span>16 Jul</span>
+              <span>31 Jul</span>
+            </div>
+            <div class="legend">
+              <span><i style="background:var(--teal-soft);border:1px solid var(--teal-border);border-bottom:2px solid var(--teal)"></i>Counted (Mature)</span>
+              <span><i style="background:var(--warn-soft);border:1px solid var(--warn-line);border-bottom:2px solid var(--warn)"></i>Dropped — window not closed</span>
+              <span><i style="background:#E2E8F0;border:1px solid #CBD5E1"></i>Outside selected range</span>
+            </div>
+          </div>
+          <div class="note" id="matNote"></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Unified 10-KPI Tiles Ribbon -->
+    <section class="kpis" id="kpis"></section>
+
+    <!-- Master Cohort Data Table -->
+    <section class="panel">
+      <div class="panel-hd">
+        <span class="eyebrow">Cohort table</span>
+        <span style="font-size:11.5px;color:var(--ink3);">Fixed D0 acquisition metrics on left · Cumulative cohort metrics on right</span>
+        <span class="rowcount" id="rowCount" style="margin-left:auto;font-family:var(--mono);font-size:11px;color:var(--ink3);"></span>
+        <button class="btn ghost" id="dlCsv">Download this view (CSV)</button>
+      </div>
+      <div class="tbl-wrap">
+        <table id="tbl">
+          <thead></thead>
+          <tbody></tbody>
+          <tfoot></tfoot>
+        </table>
+      </div>
+      <div class="blank" id="blank" style="display:none;padding:30px;text-align:center;color:var(--ink2);"></div>
+    </section>
+  </main>
+
+  <!-- ==================== VIEW 2: FUNNELS & VISUALIZER ==================== -->
+  <section id="viewFunnels" class="view-section" style="display:none;">
+    <div class="charts-grid">
+      <div class="chart-box">
+        <h3>Step-by-Step Acquisition & Conversion Funnel</h3>
+        <p style="font-size:12px;color:var(--ink2);margin-bottom:12px;">Visual drop-off from impression to enrolled paying student across the active cohort window.</p>
+        <div id="overviewFunnelChart"></div>
+      </div>
+      <div class="chart-box">
+        <h3>Key Attribution & Performance Metrics</h3>
+        <div style="font-size:12px;color:var(--ink2);display:flex;flex-direction:column;gap:12px;margin-top:16px;">
+          <div style="background:#F8FAFC;padding:12px;border-radius:6px;border:1px solid #E2E8F0;">
+            <b style="color:var(--petrol);font-size:13px;">Lead Acquisition Grain vs Fact Grain</b>
+            <p style="margin:4px 0 0;">Spend sits at <code>(date, campaign, adset, ad)</code>. Leads sit at individual lead level. They are never joined as a Cartesian product in production queries.</p>
+          </div>
+          <div style="background:#F8FAFC;padding:12px;border-radius:6px;border:1px solid #E2E8F0;">
+            <b style="color:var(--petrol);font-size:13px;">Course Attribution via Ad Sets</b>
+            <p style="margin:4px 0 0;">Every ad set is tagged with its target course (e.g. <i>Bhagavad Gita for Kids</i>, <i>Spoken English</i>). Spend is 100% directly attributable without artificial allocation keys.</p>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ==================== VIEW 3: DEVICE DIAGNOSTICS ==================== -->
+  <section id="viewDiagnostics" class="view-section" style="display:none;">
+    <div class="panel">
+      <div class="panel-hd">
+        <span class="eyebrow">Device & Platform Diagnostic Audit</span>
+        <span style="font-size:11.5px;color:var(--ink3);">August/September 2026 Gita Campaign Analysis</span>
+      </div>
+      <div class="panel-bd" id="deviceComparisonContainer">
+        <div style="text-align:center;padding:30px;color:var(--ink3);">Loading device diagnostics...</div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ==================== VIEW 4: ACTIONABLE FOLLOW-UPS ==================== -->
+  <section id="viewFollowups" class="view-section" style="display:none;">
+    <div class="panel">
+      <div class="panel-hd">
+        <span class="eyebrow">Actionable Lead Follow-Up Hub</span>
+        <span style="font-size:11.5px;color:var(--ink3);">High-conversion opportunities for sales and admission counselors</span>
+        <span id="followupCount" style="margin-left:auto;font-family:var(--mono);font-size:11.5px;font-weight:700;"></span>
+      </div>
+      <div class="panel-bd">
+        <div class="followup-controls">
+          <button class="chip on" onclick="followUpManager.loadContacts('all')">All Contacts</button>
+          <button class="chip" onclick="followUpManager.loadContacts('attended_not_paid')">🎯 Attended Not Paid (Largest Opportunity)</button>
+          <button class="chip" onclick="followUpManager.loadContacts('demos_booked_3d')">📅 Demos Booked (3d)</button>
+          <button class="chip" onclick="followUpManager.loadContacts('conversions_14d')">💳 Conversions (14d)</button>
+          
+          <input type="text" class="search-input" placeholder="Search by name, phone, course, campaign..." oninput="followUpManager.setSearchQuery(this.value)">
+          <button class="btn ghost" onclick="followUpManager.exportCSV()" style="margin-left:auto;">Export CSV</button>
+        </div>
+
+        <div style="margin-bottom:10px;font-size:12px;color:var(--ink2);">
+          Total Pipeline Value: <b id="followupTotalRev" style="color:var(--petrol);font-size:13px;font-family:var(--mono);">₹0</b>
+        </div>
+
+        <div class="tbl-wrap" style="max-height:500px;">
+          <table>
+            <thead>
+              <tr>
+                <th class="dim">Lead ID</th>
+                <th class="dim">Parent Name</th>
+                <th class="dim">Phone</th>
+                <th>Lead Date</th>
+                <th class="dim">Course</th>
+                <th class="dim">Campaign</th>
+                <th>Status</th>
+                <th>Revenue</th>
+                <th>Priority</th>
+              </tr>
+            </thead>
+            <tbody id="followupTableBody"></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ==================== VIEW 5: DOCUMENTATION & FORMULAS ==================== -->
+  <section id="viewDocumentation" class="view-section" style="display:none;">
+    <div class="panel">
+      <div class="panel-hd">
+        <span class="eyebrow">Technical Reference & Handbook</span>
+        <span style="font-size:11.5px;color:var(--ink3);">Rules, formulas, and architecture guidelines</span>
+      </div>
+      <div class="panel-bd notes-bd" style="max-width:100%;">
+        <h4>1 · The Cohort Rule</h4>
+        <p>A lead belongs to the cohort of the date it was captured, permanently. For cohort period <code>Dn</code>, count every event that happened between the capture date and capture date <code>+ n</code> days, cumulatively. <code>D3</code> is not "what happened on day 3" — it is everything from day 0 through day 3. <code>Till date</code> runs from capture date to refresh timestamp.</p>
+
+        <h4>2 · What Moves with Cohort Period vs What Remains Fixed at D0</h4>
+        <p><b>Moves:</b> Demos booked, scheduled, attended, attendance %, conversions, conversion %, new revenue, ARPU, ROAS.<br>
+        <b>Fixed at D0:</b> Spend, impressions, clicks, contacts registered, CTR, CPL. Switching from D0 to D30 leaves total spend unchanged.</p>
+
+        <h4>3 · The Maturity Gate</h4>
+        <p>For a selected <code>Dn</code>, a capture date is included only if <code>capture date + n ≤ refresh date</code>. Incomplete windows are dropped completely to avoid artificial performance drops.</p>
+
+        <h4>4 · Recalculated Totals</h4>
+        <p>Volume columns are summed. Every ratio (CPL, Attendance %, Conversion %, ARPU, CTR, ROAS) is recalculated from the summed numerator and denominator. Ratios are never averaged.</p>
+      </div>
+    </div>
+  </section>
+
+</div>
+
+<script src="/static/js/charts.js"></script>
+<script src="/static/js/followups.js"></script>
+<script src="/static/js/app.js"></script>
+</body>
+</html>
