@@ -1,6 +1,4 @@
-from typing import List, Optional
-from pydantic_settings import BaseSettings, SettingsConfigDict
-from pydantic import Field
+from pydantic import Field, AliasChoices
 import urllib.parse
 import os
 
@@ -9,12 +7,15 @@ class Settings(BaseSettings):
     VERSION: str = "1.0.0"
     API_V1_STR: str = "/api/v1"
     
-    # Database Connection Details (Supports both MARIADB_* and DB_* env vars)
-    MARIADB_HOST: str = Field(default="localhost", validation_alias="DB_HOST")
-    MARIADB_PORT: int = Field(default=3306, validation_alias="DB_PORT")
-    MARIADB_USER: str = Field(default="root", validation_alias="DB_USERNAME")
-    MARIADB_PASSWORD: str = Field(default="", validation_alias="DB_PASSWORD")
-    MARIADB_DATABASE: str = Field(default="production", validation_alias="DB_NAME")
+    # Database Connection Details (Supports MARIADB_*, DB_HOST, DB_USER, DB_PASS, DB_NAME)
+    MARIADB_HOST: str = Field(default="localhost", validation_alias=AliasChoices("DB_HOST", "MARIADB_HOST"))
+    MARIADB_PORT: int = Field(default=3306, validation_alias=AliasChoices("DB_PORT", "MARIADB_PORT"))
+    MARIADB_USER: str = Field(default="root", validation_alias=AliasChoices("DB_USER", "DB_USERNAME", "MARIADB_USER"))
+    MARIADB_PASSWORD: str = Field(default="", validation_alias=AliasChoices("DB_PASS", "DB_PASSWORD", "MARIADB_PASSWORD"))
+    MARIADB_DATABASE: str = Field(default="production", validation_alias=AliasChoices("DB_NAME", "MARIADB_DATABASE"))
+    
+    # Read-Only Safety Enforcer
+    DB_READ_ONLY: bool = Field(default=True, validation_alias=AliasChoices("DB_READ_ONLY", "READ_ONLY"))
     
     # Database URL Constructor with safe URL encoding
     @property
@@ -22,6 +23,7 @@ class Settings(BaseSettings):
         escaped_user = urllib.parse.quote_plus(self.MARIADB_USER)
         escaped_pass = urllib.parse.quote_plus(self.MARIADB_PASSWORD)
         return f"mysql+pymysql://{escaped_user}:{escaped_pass}@{self.MARIADB_HOST}:{self.MARIADB_PORT}/{self.MARIADB_DATABASE}?charset=utf8mb4"
+
     
     # Feature flags
     MOCK_DATA_FALLBACK: bool = True

@@ -1,4 +1,4 @@
-from sqlalchemy import create_engine, text
+from sqlalchemy import create_engine, text, event
 from sqlalchemy.orm import sessionmaker, declarative_base
 from backend.app.core.config import settings
 import logging
@@ -14,13 +14,26 @@ try:
         pool_recycle=3600,
         pool_size=10,
         max_overflow=20,
-        connect_args={"connect_timeout": 5}
+        connect_args={"connect_timeout": 5},
+        execution_options={"read_only": settings.DB_READ_ONLY}
     )
+    
+    if settings.DB_READ_ONLY:
+        @event.listens_for(engine, "connect")
+        def set_session_readonly(dbapi_connection, connection_record):
+            try:
+                cursor = dbapi_connection.cursor()
+                cursor.execute("SET SESSION TRANSACTION READ ONLY;")
+                cursor.close()
+            except Exception as ex:
+                logger.warning(f"Could not set session to read-only: {ex}")
+
     SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 except Exception as e:
     logger.warning(f"Could not initialize MariaDB engine: {e}")
     engine = None
     SessionLocal = None
+
 
 def get_db():
     """FastAPI database session dependency with graceful error handling"""

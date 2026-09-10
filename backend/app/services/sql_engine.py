@@ -118,7 +118,23 @@ class SQLEngine:
         compiled_sql = self.compile_template(sql_template, params)
         start_time = time.time()
 
+        # Strict Read-Only Safety Guard for Production Protection
+        write_keywords = r"\b(INSERT|UPDATE|DELETE|DROP|ALTER|TRUNCATE|REPLACE|CREATE|GRANT|REVOKE|LOCK)\b"
+        if re.search(write_keywords, compiled_sql, re.IGNORECASE):
+            logger.warning("Attempted write/mutation query blocked in read-only production mode.")
+            return {
+                "success": False,
+                "executed": False,
+                "error": "Security Restriction: Write / DDL operations are strictly disabled. The dashboard operates in READ-ONLY mode on the production database.",
+                "compiled_sql": compiled_sql,
+                "columns": [],
+                "rows": [],
+                "row_count": 0,
+                "duration_ms": 0.0
+            }
+
         if not check_db_connection() or not engine:
+
             return {
                 "success": False,
                 "executed": False,
