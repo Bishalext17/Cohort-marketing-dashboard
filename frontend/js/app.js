@@ -8,8 +8,8 @@ class CohortApp {
     this.metadata = null;
     this.state = {
       cohort_period: "Till date",
-      date_from: "2026-08-07",
-      date_to: "2026-08-31",
+      date_from: "2026-07-01",
+      date_to: "2026-07-31",
       channels: [],
       platforms: [],
       countries: [],
@@ -97,6 +97,9 @@ class CohortApp {
           window.followUpManager.loadContacts("all");
         } else if (targetView === "viewDiagnostics") {
           this.loadDeviceDiagnostics();
+        } else if (targetView === "viewFunnels") {
+          this.refreshKPIs();
+          this.refreshMaturity();
         }
       });
     });
@@ -225,8 +228,8 @@ class CohortApp {
     const resetBtn = document.getElementById("resetAll");
     if (resetBtn) {
       resetBtn.addEventListener("click", () => {
-        this.state.date_from = "2026-08-07";
-        this.state.date_to = "2026-08-31";
+        this.state.date_from = "2026-07-01";
+        this.state.date_to = "2026-07-31";
         if (dateFromInp) dateFromInp.value = this.state.date_from;
         if (dateToInp) dateToInp.value = this.state.date_to;
         this.state.channels = [...this.metadata.channels];
@@ -374,6 +377,19 @@ class CohortApp {
         stripEl.innerHTML = data.days.map(d => `
           <div class="cell ${d.status === 'counted' ? 'inc' : 'exc'}" title="${d.date}: ${d.status}"></div>
         `).join("");
+
+        const stripAxisEl = document.getElementById("stripAxis");
+        if (stripAxisEl && data.days.length > 0) {
+          const first = data.days[0].date;
+          const midIdx = Math.floor(data.days.length / 2);
+          const mid = data.days[midIdx].date;
+          const last = data.days[data.days.length - 1].date;
+          stripAxisEl.innerHTML = `
+            <span>Day 1 (${first.slice(5)})</span>
+            <span>Day ${midIdx + 1} (${mid.slice(5)})</span>
+            <span>Day ${data.days.length} (${last.slice(5)})</span>
+          `;
+        }
 
         // Render progression curve chart
         if (window.chartRenderer) {

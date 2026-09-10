@@ -161,22 +161,40 @@ class CohortAnalyticsService:
             return cached
 
         offset = self._parse_cohort_offset(cohort_period)
-        start_str = filters.date_from or "2026-08-07"
-        end_str = filters.date_to or "2026-08-31"
+        start_str = filters.date_from or "2026-07-01"
+        end_str = filters.date_to or "2026-07-31"
         
         try:
             start_date = datetime.strptime(start_str, "%Y-%m-%d")
             end_date = datetime.strptime(end_str, "%Y-%m-%d")
             days = max(1, (end_date - start_date).days + 1)
         except Exception:
-            start_date = datetime(2026, 8, 7)
-            end_date = datetime(2026, 8, 31)
-            days = 25
+            start_date = datetime(2026, 7, 1)
+            end_date = datetime(2026, 7, 31)
+            days = 31
             
         today = datetime.now()
         days_list = []
         counted_count = 0
         dropped_count = 0
+
+        base_start = datetime.strptime(self.raw["meta"]["start"], "%Y-%m-%d")
+        valid_combos = set(self.filter_combos(filters))
+        daily_leads: Dict[str, int] = {}
+        daily_att: Dict[str, int] = {}
+        daily_conv: Dict[str, int] = {}
+        daily_rev: Dict[str, float] = {}
+
+        for ld in self.lead_records:
+            if ld["combo_idx"] not in valid_combos:
+                continue
+            d_str = (base_start + timedelta(days=ld["day"])).strftime("%Y-%m-%d")
+            daily_leads[d_str] = daily_leads.get(d_str, 0) + 1
+            if ld["att_d"] >= 0:
+                daily_att[d_str] = daily_att.get(d_str, 0) + 1
+            if ld["conv_d"] >= 0:
+                daily_conv[d_str] = daily_conv.get(d_str, 0) + 1
+                daily_rev[d_str] = daily_rev.get(d_str, 0.0) + ld["revenue"]
 
         for d in range(days):
             curr_date_dt = start_date + timedelta(days=d)
@@ -199,10 +217,10 @@ class CohortAnalyticsService:
                 day_num=d+1,
                 status=status,
                 is_mature=is_mature,
-                leads_captured=0,
-                attended_count=0,
-                conversions_count=0,
-                revenue=0.0
+                leads_captured=daily_leads.get(curr_date, 0),
+                attended_count=daily_att.get(curr_date, 0),
+                conversions_count=daily_conv.get(curr_date, 0),
+                revenue=daily_rev.get(curr_date, 0.0)
             ))
 
         if offset is None:
@@ -231,8 +249,8 @@ class CohortAnalyticsService:
         # Check if live database is connected
         if check_db_connection():
             try:
-                from_date = filters.date_from or "2026-08-07"
-                to_date = filters.date_to or "2026-08-31"
+                from_date = filters.date_from or "2026-07-01"
+                to_date = filters.date_to or "2026-07-31"
                 offset = self._parse_cohort_offset(filters.cohort_period)
                 cohort_days = 9999 if offset is None else offset
                 
@@ -445,12 +463,24 @@ class CohortAnalyticsService:
         start_date = datetime.strptime(self.raw["meta"]["start"], "%Y-%m-%d")
         valid_combos = set(self.filter_combos(filters))
         
+        try:
+            filter_from_dt = datetime.strptime(filters.date_from, "%Y-%m-%d") if filters.date_from else start_date
+        except Exception:
+            filter_from_dt = start_date
+            
+        try:
+            filter_to_dt = datetime.strptime(filters.date_to, "%Y-%m-%d") if filters.date_to else (start_date + timedelta(days=days - 1))
+        except Exception:
+            filter_to_dt = start_date + timedelta(days=days - 1)
+
         mature_days = set()
         for d in range(days):
-            if offset is None or (d + offset < days):
-                mature_days.add(d)
+            curr_date = start_date + timedelta(days=d)
+            if filter_from_dt <= curr_date <= filter_to_dt:
+                if offset is None or (d + offset < days):
+                    mature_days.add(d)
 
-        slicers = filters.slicers or []
+        slicers = filters.slicers if (filters.slicers and len(filters.slicers) > 0) else ["date"]
         groups: Dict[str, Dict[str, Any]] = {}
 
         for sp in self.spend_records:
@@ -555,7 +585,7 @@ class CohortAnalyticsService:
         tot_roas = round((tot_rev / tot_spend), 2) if tot_spend > 0 else 0.0
 
         totals = CohortTableRow(
-            dimensions={"label": "TOTAL"},
+            dimensions={slicers[0]: "TOTAL", "label": "TOTAL"},
             spend=round(tot_spend, 2),
             impressions=tot_imp,
             clicks=tot_clicks,
@@ -573,9 +603,19 @@ class CohortAnalyticsService:
             roas=tot_roas
         )
 
+        dim_labels = {
+            "date": "Lead Capture Date",
+            "campaign": "Campaign Name",
+            "adset": "Ad Set Name",
+            "ad": "Ad Name",
+            "country": "Country",
+            "channel": "Channel",
+            "platform": "Platform",
+            "course": "Course"
+        }
         headers = []
         for s in slicers:
-            headers.append({"key": s, "label": s.replace("_", " ").title()})
+            headers.append({"key": s, "label": dim_labels.get(s, s.replace("_", " ").title())})
         headers.extend([
             {"key": "spend", "label": "Spend (₹)"},
             {"key": "impressions", "label": "Impressions"},
