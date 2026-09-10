@@ -542,8 +542,7 @@ class CohortApp {
           <div style="padding:20px;text-align:center;">
             <div style="font-size:24px;margin-bottom:8px;">🔍</div>
             <div style="font-weight:600;color:var(--ink);margin-bottom:4px;">No records found for ${this.state.date_from} → ${this.state.date_to}</div>
-            <div style="font-size:12px;color:var(--ink3);margin-bottom:14px;">The database snapshot contains records for <b>July 2026 (2026-07-01 to 2026-07-31)</b>.</div>
-            <button class="mini" style="background:var(--petrol);color:#fff;border:none;padding:6px 14px;border-radius:var(--radius-sm);cursor:pointer;font-weight:600;" onclick="cohortApp.resetToJulyRange()">Switch to July 2026 Data</button>
+            <div style="font-size:12px;color:var(--ink3);margin-bottom:14px;">Try expanding your date range or adjusting the active filters.</div>
           </div>
         `;
       }
