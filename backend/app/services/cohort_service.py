@@ -167,6 +167,8 @@ class CohortAnalyticsService:
         try:
             start_date = datetime.strptime(start_str, "%Y-%m-%d")
             end_date = datetime.strptime(end_str, "%Y-%m-%d")
+            if start_date > end_date:
+                start_date, end_date = end_date, start_date
             days = max(1, (end_date - start_date).days + 1)
         except Exception:
             start_date = datetime(2026, 7, 1)
@@ -251,6 +253,8 @@ class CohortAnalyticsService:
             try:
                 from_date = filters.date_from or "2026-07-01"
                 to_date = filters.date_to or "2026-07-31"
+                if from_date > to_date:
+                    from_date, to_date = to_date, from_date
                 offset = self._parse_cohort_offset(filters.cohort_period)
                 cohort_days = 9999 if offset is None else offset
                 
@@ -472,6 +476,9 @@ class CohortAnalyticsService:
             filter_to_dt = datetime.strptime(filters.date_to, "%Y-%m-%d") if filters.date_to else (start_date + timedelta(days=days - 1))
         except Exception:
             filter_to_dt = start_date + timedelta(days=days - 1)
+
+        if filter_from_dt > filter_to_dt:
+            filter_from_dt, filter_to_dt = filter_to_dt, filter_from_dt
 
         mature_days = set()
         for d in range(days):

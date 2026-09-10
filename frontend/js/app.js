@@ -63,6 +63,19 @@ class CohortApp {
     }
   }
 
+  updateTimestamp(customTime = null) {
+    const lastUpd = document.getElementById("lastUpd");
+    if (!lastUpd) return;
+    if (customTime) {
+      lastUpd.innerText = customTime.replace("T", " ");
+      return;
+    }
+    const d = new Date();
+    const pad = (n) => String(n).padStart(2, '0');
+    const ts = `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`;
+    lastUpd.innerText = ts;
+  }
+
   async fetchMetadata() {
     try {
       const res = await (window.authFetch || fetch)("/api/v1/metadata");
@@ -73,12 +86,14 @@ class CohortApp {
       this.state.countries = [...this.metadata.countries];
       this.state.courses = [...this.metadata.courses];
       
-      const lastUpd = document.getElementById("lastUpd");
-      if (lastUpd && this.metadata.meta) {
-        lastUpd.innerText = this.metadata.meta.lastUpdated.replace("T", " ");
+      if (this.metadata && this.metadata.meta && this.metadata.meta.lastUpdated) {
+        this.updateTimestamp(this.metadata.meta.lastUpdated);
+      } else {
+        this.updateTimestamp();
       }
     } catch (e) {
       console.error("Error fetching metadata:", e);
+      this.updateTimestamp();
     }
   }
 
@@ -179,6 +194,10 @@ class CohortApp {
       dateFromInp.value = this.state.date_from;
       dateFromInp.addEventListener("change", (e) => {
         this.state.date_from = e.target.value;
+        if (dateToInp && this.state.date_from > this.state.date_to) {
+          this.state.date_to = this.state.date_from;
+          dateToInp.value = this.state.date_to;
+        }
         this.refreshDashboard();
       });
     }
@@ -186,6 +205,10 @@ class CohortApp {
       dateToInp.value = this.state.date_to;
       dateToInp.addEventListener("change", (e) => {
         this.state.date_to = e.target.value;
+        if (dateFromInp && this.state.date_to < this.state.date_from) {
+          this.state.date_from = this.state.date_to;
+          dateFromInp.value = this.state.date_from;
+        }
         this.refreshDashboard();
       });
     }
@@ -213,6 +236,8 @@ class CohortApp {
         refreshBtn.style.opacity = "0.6";
         this.state.force_refresh = true;
         
+        await this.fetchMetadata();
+        await this.checkHealth();
         await this.refreshDashboard();
         
         this.state.force_refresh = false;
@@ -315,6 +340,7 @@ class CohortApp {
   }
 
   async refreshDashboard() {
+    this.updateTimestamp();
     this.showLoadingSkeletons();
     await Promise.all([
       this.refreshMaturity(),
@@ -512,7 +538,14 @@ class CohortApp {
       tbl.style.display = "none";
       if (blankEl) {
         blankEl.style.display = "block";
-        blankEl.innerText = "No data found matching the selected filter criteria.";
+        blankEl.innerHTML = `
+          <div style="padding:20px;text-align:center;">
+            <div style="font-size:24px;margin-bottom:8px;">🔍</div>
+            <div style="font-weight:600;color:var(--ink);margin-bottom:4px;">No records found for ${this.state.date_from} → ${this.state.date_to}</div>
+            <div style="font-size:12px;color:var(--ink3);margin-bottom:14px;">The database snapshot contains records for <b>July 2026 (2026-07-01 to 2026-07-31)</b>.</div>
+            <button class="mini" style="background:var(--petrol);color:#fff;border:none;padding:6px 14px;border-radius:var(--radius-sm);cursor:pointer;font-weight:600;" onclick="cohortApp.resetToJulyRange()">Switch to July 2026 Data</button>
+          </div>
+        `;
       }
       this.renderPagination(0);
       return;
@@ -682,6 +715,16 @@ class CohortApp {
     } catch (e) {
       console.error("Error loading device diagnostics:", e);
     }
+  }
+
+  resetToJulyRange() {
+    this.state.date_from = "2026-07-01";
+    this.state.date_to = "2026-07-31";
+    const dateFromInp = document.getElementById("inputDateFrom");
+    const dateToInp = document.getElementById("inputDateTo");
+    if (dateFromInp) dateFromInp.value = this.state.date_from;
+    if (dateToInp) dateToInp.value = this.state.date_to;
+    this.refreshDashboard();
   }
 
   filterByDimension(dimKey, encodedVal) {
