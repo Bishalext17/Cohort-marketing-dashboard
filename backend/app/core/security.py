@@ -31,18 +31,31 @@ def _b64url_decode(s: str) -> bytes:
     return base64.urlsafe_b64decode(s + padding)
 
 def verify_password(plain_password: str, expected_password: str) -> bool:
-    """Timing-attack safe comparison for credentials"""
-    return hmac.compare_digest(plain_password.encode("utf-8"), expected_password.encode("utf-8"))
+    """Timing-attack safe comparison for credentials with quote/whitespace resilience"""
+    if not plain_password or not expected_password:
+        return False
+    clean_plain = str(plain_password).strip()
+    clean_expected = str(expected_password).strip().strip('"').strip("'")
+    return hmac.compare_digest(clean_plain.encode("utf-8"), clean_expected.encode("utf-8"))
 
 def authenticate_user(username: str, password: str) -> Optional[UserProfile]:
     """Authenticates username & password against configured admin credentials"""
-    if username.strip().lower() == settings.ADMIN_USERNAME.strip().lower() and verify_password(password, settings.ADMIN_PASSWORD):
+    if not username or not password:
+        return None
+    
+    clean_user = str(username).strip().strip('"').strip("'").lower()
+    clean_admin_user = str(settings.ADMIN_USERNAME).strip().strip('"').strip("'").lower()
+
+    if clean_user == clean_admin_user and verify_password(password, settings.ADMIN_PASSWORD):
         return UserProfile(
-            username=settings.ADMIN_USERNAME,
+            username=settings.ADMIN_USERNAME.strip().strip('"').strip("'"),
             name=settings.ADMIN_NAME,
             role=settings.ADMIN_ROLE,
             avatar="👨‍💼"
         )
+    logger.warning(f"Failed login attempt for user: '{clean_user}'")
+    return None
+
     return None
 
 def create_access_token(user: UserProfile, expires_delta: Optional[timedelta] = None) -> str:

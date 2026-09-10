@@ -11,8 +11,11 @@ services:
       - "127.0.0.1:8000:8000"
     env_file:
       - ./backend/.env
+    volumes:
+      - ./backend/.env:/app/backend/.env:ro
     environment:
       - PORT=8000
+
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
       interval: 30s
