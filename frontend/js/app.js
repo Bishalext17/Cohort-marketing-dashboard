@@ -32,8 +32,6 @@ class CohortApp {
     };
 
     this.currentTableData = null;
-    this.availableQueries = [];
-    this.selectedQuery = null;
 
     this.init();
   }
@@ -44,7 +42,6 @@ class CohortApp {
     this.renderControls();
     await this.refreshDashboard();
     this.checkHealth();
-    this.setupQueryStudio();
   }
 
   async checkHealth() {
@@ -100,8 +97,6 @@ class CohortApp {
           window.followUpManager.loadContacts("all");
         } else if (targetView === "viewDiagnostics") {
           this.loadDeviceDiagnostics();
-        } else if (targetView === "viewQueryStudio") {
-          this.loadQueryStudioList();
         }
       });
     });

@@ -16,8 +16,7 @@ from backend.app.api.v1.kpis import get_kpi_tiles
 from backend.app.api.v1.cohorts import get_master_cohort_table, get_cohort_maturity
 from backend.app.api.v1.devices import get_device_comparison
 from backend.app.api.v1.followups import get_followup_contacts, export_followup_csv, update_lead_status
-from backend.app.api.v1.query_runner import list_queries, get_query_template, run_query
-from backend.app.models.schemas import FilterParams, UpdateLeadStatusRequest, QueryRunRequest
+from backend.app.models.schemas import FilterParams, UpdateLeadStatusRequest
 from backend.app.services.cohort_service import cohort_service
 from backend.app.services.sql_engine import sql_engine
 
@@ -160,24 +159,6 @@ class TestCohortDashboard(unittest.TestCase):
         self.assertNotIn("AND campaign IN", compiled_2)
         self.assertNotIn("AND country =", compiled_2)
 
-    def test_query_runner_api(self):
-        queries = list_queries()
-        self.assertGreater(len(queries), 0)
-        
-        first_q = queries[0]
-        rel_path = first_q["relative_path"] if isinstance(first_q, dict) else first_q.relative_path
-        tpl = get_query_template(rel_path)
-        self.assertIn("sql", tpl)
-        
-        # Run query in simulation mode
-        run_res = run_query(QueryRunRequest(
-            query_path=rel_path,
-            cohort_days=9999,
-            from_date="2026-07-01",
-            to_date="2026-07-31"
-        ))
-        self.assertIsNotNone(run_res.compiled_sql)
-        self.assertGreaterEqual(run_res.duration_ms, 0)
 
     def test_cache_manager_operations(self):
         from backend.app.services.cache_manager import cache_manager
