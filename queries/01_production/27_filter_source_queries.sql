@@ -1,5 +1,5 @@
 -- ============================================================
--- 27 · FILTER SOURCE QUERIES (dropdown value lists)
+-- 27 · FILTER SOURCE QUERIES (dropdown value lists) [OPTIMISED]
 --
 -- HOW TO BUILD ONE — work backwards from the predicate it feeds.
 --
@@ -49,8 +49,7 @@ ORDER BY campaign_name;
 -- Value column: country_code
 -- ============================================================
 SELECT DISTINCT country_code
-FROM ( SELECT campaign_code, MIN(country_code) AS country_code
-       FROM onlinecampaigns GROUP BY campaign_code ) b
+FROM onlinecampaigns
 WHERE country_code IS NOT NULL AND country_code <> ''
 ORDER BY country_code;
 

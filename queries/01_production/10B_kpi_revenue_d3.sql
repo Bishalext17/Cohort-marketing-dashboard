@@ -1,5 +1,5 @@
 -- ============================================================
--- 10B · KPI TILES — CONVERSIONS & REVENUE (Pinned to Fixed D3 Window)
+-- 10B · KPI TILES — CONVERSIONS & REVENUE (Pinned to Fixed D3 Window) [HYPER-OPTIMISED]
 -- Powers Tiles 6–8: Conversion % · D3, Paid ROAS · D3, ARPU · D3
 --
 -- CRITICAL WIRING RULE:
@@ -48,56 +48,62 @@ lead_by_parent AS (
            cl.ad_key, cl.window_end
     FROM cohort_leads cl
     JOIN parents p ON p.mobile_number = cl.mobile AND p.deleted_at IS NULL
+    WHERE cl.mobile IS NOT NULL
 ),
 
 scoped_parents AS (
     SELECT DISTINCT parent_id FROM lead_by_parent
 ),
 
-sched_pool AS (
-    SELECT csb.id AS booking_id, csb.parent_id, csb.leads_contact_utm_id,
-           DATE(cs.class_date) AS class_date,
-           csb.attended_class
-    FROM classschedulebookings csb
+-- Scoped schedules by Lead UTM ID (index seek)
+sched_pool_utm AS (
+    SELECT
+        cl.capture_date, cl.source_campaign, cl.ad_key,
+        csb.id AS booking_id, csb.attended_class
+    FROM cohort_leads cl
+    JOIN classschedulebookings csb ON csb.leads_contact_utm_id = cl.lead_key AND csb.deleted_at IS NULL
     JOIN classschedules cs ON csb.classschedule_id = cs.id AND cs.deleted_at IS NULL
-    JOIN classes c         ON cs.class_id = c.id           AND c.deleted_at IS NULL
-    WHERE csb.deleted_at IS NULL
-      AND csb.demo_class = 'Yes' AND csb.is_cancelled = 'No'
+    JOIN classes c ON cs.class_id = c.id AND c.deleted_at IS NULL
+    WHERE csb.demo_class = 'Yes' AND csb.is_cancelled = 'No'
       AND c.category_id <> '31' AND c.is_workshop = 'no'
       AND c.class_name NOT LIKE '%MOCK DEMO%' AND c.class_name NOT LIKE '%TEACHER NAME%'
-      AND cs.class_date >= {{from_date}}
-      AND cs.class_date <  DATE_ADD(
-              LEAST(CURDATE(), DATE_ADD({{to_date}}, INTERVAL 3 DAY)),
-              INTERVAL 1 DAY)
+      AND cs.class_date >= CAST(cl.capture_date AS DATETIME)
+      AND cs.class_date <  DATE_ADD(CAST(cl.window_end AS DATETIME), INTERVAL 1 DAY)
+),
+
+-- Scoped schedules by Parent Mobile (index seek)
+sched_pool_parent AS (
+    SELECT
+        lbp.capture_date, lbp.source_campaign, lbp.ad_key,
+        csb.id AS booking_id, csb.attended_class
+    FROM lead_by_parent lbp
+    JOIN classschedulebookings csb ON csb.parent_id = lbp.parent_id AND csb.deleted_at IS NULL
+    JOIN classschedules cs ON csb.classschedule_id = cs.id AND cs.deleted_at IS NULL
+    JOIN classes c ON cs.class_id = c.id AND c.deleted_at IS NULL
+    LEFT JOIN cohort_leads c2 ON c2.lead_key = csb.leads_contact_utm_id
+    WHERE csb.demo_class = 'Yes' AND csb.is_cancelled = 'No'
+      AND c.category_id <> '31' AND c.is_workshop = 'no'
+      AND c.class_name NOT LIKE '%MOCK DEMO%' AND c.class_name NOT LIKE '%TEACHER NAME%'
+      AND cs.class_date >= CAST(lbp.capture_date AS DATETIME)
+      AND cs.class_date <  DATE_ADD(CAST(lbp.window_end AS DATETIME), INTERVAL 1 DAY)
+      AND c2.lead_key IS NULL
 ),
 
 sched_attr AS (
-    SELECT cl.capture_date, cl.source_campaign, cl.ad_key,
-           sp.booking_id, sp.attended_class
-    FROM sched_pool sp
-    JOIN cohort_leads cl
-           ON cl.lead_key = sp.leads_contact_utm_id
-          AND sp.class_date BETWEEN cl.capture_date AND cl.window_end
+    SELECT * FROM sched_pool_utm
     UNION ALL
-    SELECT lbp.capture_date, lbp.source_campaign, lbp.ad_key,
-           sp.booking_id, sp.attended_class
-    FROM sched_pool sp
-    LEFT JOIN cohort_leads c2 ON c2.lead_key = sp.leads_contact_utm_id
-    JOIN lead_by_parent lbp
-           ON lbp.parent_id = sp.parent_id
-          AND sp.class_date BETWEEN lbp.capture_date AND lbp.window_end
-    WHERE c2.lead_key IS NULL
+    SELECT * FROM sched_pool_parent
 ),
 
 Demo_Scheduled AS (
     SELECT
-        COUNT(DISTINCT booking_id)                                           AS demos_scheduled,
-        COUNT(DISTINCT CASE WHEN attended_class='Yes' THEN booking_id END)   AS demos_attended
+        COUNT(DISTINCT booking_id)                                         AS demos_scheduled,
+        COUNT(DISTINCT CASE WHEN attended_class='Yes' THEN booking_id END) AS demos_attended
     FROM sched_attr
 ),
 
 prior AS (
-    SELECT i.parent_id, MIN(DATE(i.created_at)) AS first_invoice
+    SELECT i.parent_id, MIN(i.created_at) AS first_invoice_ts
     FROM invoices i
     JOIN scoped_parents sp ON sp.parent_id = i.parent_id
     WHERE i.invoice_type = 'regular'
@@ -117,16 +123,17 @@ Converted AS (
                  ELSE 0 END)                                             AS new_revenue_first_time
     FROM lead_by_parent lbp
     JOIN invoices i ON i.parent_id = lbp.parent_id
-                   AND DATE(i.created_at) BETWEEN lbp.capture_date AND lbp.window_end
+                   AND i.created_at >= CAST(lbp.capture_date AS DATETIME)
+                   AND i.created_at <  DATE_ADD(CAST(lbp.window_end AS DATETIME), INTERVAL 1 DAY)
     LEFT JOIN currencies curr ON i.currency = curr.currency
     LEFT JOIN prior pr ON pr.parent_id = i.parent_id
-                      AND pr.first_invoice < lbp.capture_date
+                      AND pr.first_invoice_ts < CAST(lbp.capture_date AS DATETIME)
     WHERE i.type_of_booking IN ('New','Token')
 ),
 
 -- Spend restricted to D3 mature capture dates
 fb_ad AS (
-    SELECT SUM(a.spend) AS spend_in_d3_window
+    SELECT COALESCE(SUM(a.spend),0) AS spend_in_d3_window
     FROM facebookads a
     LEFT JOIN ( SELECT campaign_code, MIN(country_code) AS country_code
                 FROM onlinecampaigns GROUP BY campaign_code ) b
@@ -136,36 +143,22 @@ fb_ad AS (
       AND DATE_ADD(DATE(a.capture_date), INTERVAL 3 DAY) <= CURDATE()
       [[AND a.campaign_name IN ({{campaign_nm}})]]
       [[AND b.country_code IN ({{country_cd}})]]
+),
+
+lead_counts AS (
+    SELECT COUNT(DISTINCT lead_key) AS contacts_in_d3_window
+    FROM cohort_leads
 )
 
 SELECT
-    ROUND(100.0 * (SELECT conversions_first_time FROM Converted)
-          / NULLIF((SELECT demos_attended FROM Demo_Scheduled),0), 2) AS conversion_pct,
-    ROUND((SELECT new_revenue_first_time FROM Converted)
-          / NULLIF((SELECT spend_in_d3_window FROM fb_ad),0), 2)     AS roas,
-    ROUND((SELECT new_revenue_first_time FROM Converted)
-          / NULLIF((SELECT conversions_first_time FROM Converted),0)) AS arpu,
-    (SELECT COUNT(DISTINCT lead_key) FROM cohort_leads)              AS contacts_in_d3_window,
-    (SELECT spend_in_d3_window FROM fb_ad)                           AS spend_in_d3_window,
-    (SELECT conversions_first_time FROM Converted)                   AS conversions_in_d3_window,
-    (SELECT new_revenue_first_time FROM Converted)                   AS revenue_in_d3_window;
-
-
--- ============================================================
--- WINDOW MATURITY AUDIT QUERY
--- Check how many capture dates are available for each window size
--- ============================================================
-/*
-SELECT
-    'D0' AS window, COUNT(DISTINCT DATE(created_at)) AS mature_dates FROM leads_contact_event_logs
-    WHERE created_at >= '2026-08-07' AND DATE(created_at) <= CURDATE()
-UNION ALL
-SELECT 'D1', COUNT(DISTINCT DATE(created_at)) FROM leads_contact_event_logs
-    WHERE created_at >= '2026-08-07' AND DATE_ADD(DATE(created_at), INTERVAL 1 DAY) <= CURDATE()
-UNION ALL
-SELECT 'D3', COUNT(DISTINCT DATE(created_at)) FROM leads_contact_event_logs
-    WHERE created_at >= '2026-08-07' AND DATE_ADD(DATE(created_at), INTERVAL 3 DAY) <= CURDATE()
-UNION ALL
-SELECT 'D7', COUNT(DISTINCT DATE(created_at)) FROM leads_contact_event_logs
-    WHERE created_at >= '2026-08-07' AND DATE_ADD(DATE(created_at), INTERVAL 7 DAY) <= CURDATE();
-*/
+    ROUND(100.0 * cv.conversions_first_time / NULLIF(ds.demos_attended,0), 2) AS conversion_pct,
+    ROUND(cv.new_revenue_first_time / NULLIF(fb.spend_in_d3_window,0), 2)     AS roas,
+    ROUND(cv.new_revenue_first_time / NULLIF(cv.conversions_first_time,0))    AS arpu,
+    lc.contacts_in_d3_window,
+    fb.spend_in_d3_window,
+    cv.conversions_first_time                                                AS conversions_in_d3_window,
+    cv.new_revenue_first_time                                                AS revenue_in_d3_window
+FROM Converted cv
+CROSS JOIN Demo_Scheduled ds
+CROSS JOIN fb_ad fb
+CROSS JOIN lead_counts lc;

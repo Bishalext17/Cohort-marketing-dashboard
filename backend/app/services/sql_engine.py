@@ -4,6 +4,7 @@ import time
 from typing import Dict, Any, List, Optional, Tuple
 from sqlalchemy import text
 from backend.app.core.database import engine, check_db_connection
+from backend.app.core.config import settings
 from backend.app.models.schemas import FilterParams
 import logging
 
@@ -25,6 +26,8 @@ class SQLEngine:
 
     def __init__(self, queries_dir: str = QUERIES_ROOT):
         self.queries_dir = queries_dir
+        self._query_cache: Dict[str, Dict[str, Any]] = {}
+
 
     def get_query_files(self) -> List[Dict[str, str]]:
         """Lists all available SQL production and audit queries with category metadata."""
@@ -133,8 +136,19 @@ class SQLEngine:
                 "duration_ms": 0.0
             }
 
-        if not check_db_connection() or not engine:
+        # Check In-Memory Query Cache First
+        if settings.CACHE_ENABLED and compiled_sql in self._query_cache:
+            entry = self._query_cache[compiled_sql]
+            if time.time() - entry["ts"] < settings.CACHE_TTL_SECONDS:
+                logger.info("Serving SQL query results directly from in-memory cache (0 DB load).")
+                cached_res = dict(entry["res"])
+                cached_res["duration_ms"] = round((time.time() - start_time) * 1000, 2)
+                cached_res["cached"] = True
+                return cached_res
+            else:
+                del self._query_cache[compiled_sql]
 
+        if not check_db_connection() or not engine:
             return {
                 "success": False,
                 "executed": False,
@@ -147,22 +161,35 @@ class SQLEngine:
             }
 
         try:
+            # Handle multi-statement files by taking the primary statement
+            statements = [s.strip() for s in compiled_sql.split(";") if s.strip() and not all(line.strip().startswith("--") or line.strip().startswith("/*") for line in s.strip().splitlines())]
+            exec_sql = statements[0] if statements else compiled_sql
+
             with engine.connect() as conn:
-                result = conn.execute(text(compiled_sql))
+                result = conn.execute(text(exec_sql))
                 columns = list(result.keys())
                 raw_rows = result.fetchall()
                 rows = [dict(zip(columns, row)) for row in raw_rows]
                 duration_ms = round((time.time() - start_time) * 1000, 2)
 
-                return {
+                res = {
                     "success": True,
                     "executed": True,
                     "compiled_sql": compiled_sql,
                     "columns": columns,
                     "rows": rows,
                     "row_count": len(rows),
-                    "duration_ms": duration_ms
+                    "duration_ms": duration_ms,
+                    "cached": False
                 }
+                
+                if settings.CACHE_ENABLED:
+                    self._query_cache[compiled_sql] = {
+                        "ts": time.time(),
+                        "res": res
+                    }
+                    
+                return res
         except Exception as e:
             logger.error(f"SQL Execution error: {e}")
             return {
@@ -175,5 +202,6 @@ class SQLEngine:
                 "row_count": 0,
                 "duration_ms": round((time.time() - start_time) * 1000, 2)
             }
+
 
 sql_engine = SQLEngine()

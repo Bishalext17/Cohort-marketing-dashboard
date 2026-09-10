@@ -1,5 +1,5 @@
--- COHORT — BY PLACEMENT (no spend)
--- Rebuilt 13 Aug: revenue is 'New' only (Token removed), first-payment split,
+-- COHORT — BY PLACEMENT (no spend) [HYPER-OPTIMISED]
+-- Rebuilt: revenue is 'New' only (Token removed), first-payment split,
 -- attendance on the booking cohort, blank-phone join fixed, deterministic
 -- leads_contact_utm_id attribution with phone fallback.
 --
@@ -41,39 +41,53 @@ lead_by_parent AS (
     SELECT p.id AS parent_id, cl.placement, cl.capture_date, cl.window_end
     FROM cohort_leads cl
     JOIN parents p ON p.mobile_number = cl.mobile AND p.deleted_at IS NULL
+    WHERE cl.mobile IS NOT NULL
 ),
 
-scoped_parents AS ( SELECT DISTINCT parent_id FROM lead_by_parent ),
+scoped_parents AS (
+    SELECT DISTINCT parent_id FROM lead_by_parent
+),
 
-book_pool AS (
-    SELECT csb.id AS booking_id, csb.parent_id, csb.leads_contact_utm_id,
-           DATE(csb.created_at) AS booked_date,
-           DATE(cs.class_date)  AS class_date,
-           csb.is_cancelled, csb.attended_class
-    FROM classschedulebookings csb
+-- Scoped bookings by Lead UTM ID (index seek)
+book_pool_utm AS (
+    SELECT
+        cl.placement,
+        csb.id AS booking_id, csb.is_cancelled, csb.attended_class,
+        DATE(cs.class_date) AS class_date
+    FROM cohort_leads cl
+    JOIN classschedulebookings csb ON csb.leads_contact_utm_id = cl.lead_key AND csb.deleted_at IS NULL
     JOIN classschedules cs ON csb.classschedule_id = cs.id AND cs.deleted_at IS NULL
-    JOIN classes c         ON cs.class_id = c.id           AND c.deleted_at IS NULL
-    WHERE csb.deleted_at IS NULL AND csb.demo_class = 'Yes'
+    JOIN classes c ON cs.class_id = c.id AND c.deleted_at IS NULL
+    WHERE csb.demo_class = 'Yes'
       AND c.category_id <> '31' AND c.is_workshop = 'no'
       AND c.class_name NOT LIKE '%MOCK DEMO%' AND c.class_name NOT LIKE '%TEACHER NAME%'
-      AND csb.created_at >= {{from_date}}
-      AND csb.created_at <  DATE_ADD(CURDATE(), INTERVAL 1 DAY)
+      AND csb.created_at >= CAST(cl.capture_date AS DATETIME)
+      AND csb.created_at <  DATE_ADD(CAST(cl.window_end AS DATETIME), INTERVAL 1 DAY)
+),
+
+-- Scoped bookings by Parent Mobile (index seek)
+book_pool_parent AS (
+    SELECT
+        lbp.placement,
+        csb.id AS booking_id, csb.is_cancelled, csb.attended_class,
+        DATE(cs.class_date) AS class_date
+    FROM lead_by_parent lbp
+    JOIN classschedulebookings csb ON csb.parent_id = lbp.parent_id AND csb.deleted_at IS NULL
+    JOIN classschedules cs ON csb.classschedule_id = cs.id AND cs.deleted_at IS NULL
+    JOIN classes c ON cs.class_id = c.id AND c.deleted_at IS NULL
+    LEFT JOIN cohort_leads c2 ON c2.lead_key = csb.leads_contact_utm_id
+    WHERE csb.demo_class = 'Yes'
+      AND c.category_id <> '31' AND c.is_workshop = 'no'
+      AND c.class_name NOT LIKE '%MOCK DEMO%' AND c.class_name NOT LIKE '%TEACHER NAME%'
+      AND csb.created_at >= CAST(lbp.capture_date AS DATETIME)
+      AND csb.created_at <  DATE_ADD(CAST(lbp.window_end AS DATETIME), INTERVAL 1 DAY)
+      AND c2.lead_key IS NULL
 ),
 
 book_attr AS (
-    SELECT cl.placement, bp.booking_id, bp.is_cancelled, bp.attended_class, bp.class_date
-    FROM book_pool bp
-    JOIN cohort_leads cl
-           ON cl.lead_key = bp.leads_contact_utm_id
-          AND bp.booked_date BETWEEN cl.capture_date AND cl.window_end
+    SELECT * FROM book_pool_utm
     UNION ALL
-    SELECT lbp.placement, bp.booking_id, bp.is_cancelled, bp.attended_class, bp.class_date
-    FROM book_pool bp
-    LEFT JOIN cohort_leads c2 ON c2.lead_key = bp.leads_contact_utm_id
-    JOIN lead_by_parent lbp
-           ON lbp.parent_id = bp.parent_id
-          AND bp.booked_date BETWEEN lbp.capture_date AND lbp.window_end
-    WHERE c2.lead_key IS NULL
+    SELECT * FROM book_pool_parent
 ),
 
 Demo_Bookings AS (
@@ -88,7 +102,7 @@ Demo_Bookings AS (
 ),
 
 prior AS (
-    SELECT i.parent_id, MIN(DATE(i.created_at)) AS first_invoice
+    SELECT i.parent_id, MIN(i.created_at) AS first_invoice_ts
     FROM invoices i
     JOIN scoped_parents sp ON sp.parent_id = i.parent_id
     WHERE i.invoice_type = 'regular'
@@ -115,10 +129,11 @@ Converted AS (
                  ELSE 0 END)                                              AS new_revenue
     FROM lead_by_parent lbp
     JOIN invoices i ON i.parent_id = lbp.parent_id
-                   AND DATE(i.created_at) BETWEEN lbp.capture_date AND lbp.window_end
+                   AND i.created_at >= CAST(lbp.capture_date AS DATETIME)
+                   AND i.created_at <  DATE_ADD(CAST(lbp.window_end AS DATETIME), INTERVAL 1 DAY)
     LEFT JOIN currencies curr ON i.currency = curr.currency
     LEFT JOIN prior pr ON pr.parent_id = i.parent_id
-                      AND pr.first_invoice < lbp.capture_date
+                      AND pr.first_invoice_ts < CAST(lbp.capture_date AS DATETIME)
     WHERE i.type_of_booking IN ('New','Token')
     GROUP BY 1
 ),

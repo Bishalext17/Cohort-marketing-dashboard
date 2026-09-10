@@ -1,4 +1,4 @@
--- KPI TILES — UNIFIED. Matches the master TOTAL row exactly.
+-- KPI TILES — UNIFIED (HYPER-OPTIMISED). Matches the master TOTAL row exactly.
 --
 -- One query for ALL eight tiles. Same CTEs as COHORT_MASTER_OPTIMISED, and no
 -- scope filter by default — so every tile equals the master TOTAL row for the
@@ -20,7 +20,7 @@
 --   ARPU arpu
 --
 -- PASTE CHECK: last line ends  [[AND {{synced_only}} = 'Y']];  and the file
--- contains att_pct. If not, the paste truncated.
+-- contains att_pct.
 
 WITH
 cohort_leads AS (
@@ -59,79 +59,95 @@ lead_by_parent AS (
            cl.ad_key, cl.window_end
     FROM cohort_leads cl
     JOIN parents p ON p.mobile_number = cl.mobile AND p.deleted_at IS NULL
+    WHERE cl.mobile IS NOT NULL
 ),
 
 scoped_parents AS (
     SELECT DISTINCT parent_id FROM lead_by_parent
 ),
 
-book_pool AS (
-    SELECT csb.id AS booking_id, csb.parent_id, csb.leads_contact_utm_id,
-           DATE(csb.created_at) AS booked_date,
-           DATE(cs.class_date)  AS class_date,
-           csb.is_cancelled, csb.attended_class
-    FROM classschedulebookings csb
+-- Scoped bookings by Lead UTM ID (index seek)
+book_pool_utm AS (
+    SELECT
+        cl.capture_date, cl.source_campaign, cl.ad_key,
+        csb.id AS booking_id, csb.is_cancelled, csb.attended_class,
+        DATE(cs.class_date) AS class_date,
+        1 AS by_id
+    FROM cohort_leads cl
+    JOIN classschedulebookings csb ON csb.leads_contact_utm_id = cl.lead_key AND csb.deleted_at IS NULL
     JOIN classschedules cs ON csb.classschedule_id = cs.id AND cs.deleted_at IS NULL
-    JOIN classes c         ON cs.class_id = c.id           AND c.deleted_at IS NULL
-    WHERE csb.deleted_at IS NULL
-      AND csb.demo_class = 'Yes'
+    JOIN classes c ON cs.class_id = c.id AND c.deleted_at IS NULL
+    WHERE csb.demo_class = 'Yes'
       AND c.category_id <> '31' AND c.is_workshop = 'no'
       AND c.class_name NOT LIKE '%MOCK DEMO%' AND c.class_name NOT LIKE '%TEACHER NAME%'
-      AND csb.created_at >= {{from_date}}
-      AND csb.created_at <  DATE_ADD(CURDATE(), INTERVAL 1 DAY)
+      AND csb.created_at >= CAST(cl.capture_date AS DATETIME)
+      AND csb.created_at <  DATE_ADD(CAST(cl.window_end AS DATETIME), INTERVAL 1 DAY)
 ),
 
-sched_pool AS (
-    SELECT csb.id AS booking_id, csb.parent_id, csb.leads_contact_utm_id,
-           DATE(cs.class_date) AS class_date,
-           csb.attended_class
-    FROM classschedulebookings csb
+-- Scoped bookings by Parent Mobile (index seek)
+book_pool_parent AS (
+    SELECT
+        lbp.capture_date, lbp.source_campaign, lbp.ad_key,
+        csb.id AS booking_id, csb.is_cancelled, csb.attended_class,
+        DATE(cs.class_date) AS class_date,
+        0 AS by_id
+    FROM lead_by_parent lbp
+    JOIN classschedulebookings csb ON csb.parent_id = lbp.parent_id AND csb.deleted_at IS NULL
     JOIN classschedules cs ON csb.classschedule_id = cs.id AND cs.deleted_at IS NULL
-    JOIN classes c         ON cs.class_id = c.id           AND c.deleted_at IS NULL
-    WHERE csb.deleted_at IS NULL
-      AND csb.demo_class = 'Yes' AND csb.is_cancelled = 'No'
+    JOIN classes c ON cs.class_id = c.id AND c.deleted_at IS NULL
+    LEFT JOIN cohort_leads c2 ON c2.lead_key = csb.leads_contact_utm_id
+    WHERE csb.demo_class = 'Yes'
       AND c.category_id <> '31' AND c.is_workshop = 'no'
       AND c.class_name NOT LIKE '%MOCK DEMO%' AND c.class_name NOT LIKE '%TEACHER NAME%'
-      AND cs.class_date >= {{from_date}}
-      AND cs.class_date <  DATE_ADD(CURDATE(), INTERVAL 1 DAY)
+      AND csb.created_at >= CAST(lbp.capture_date AS DATETIME)
+      AND csb.created_at <  DATE_ADD(CAST(lbp.window_end AS DATETIME), INTERVAL 1 DAY)
+      AND c2.lead_key IS NULL
 ),
 
 book_attr AS (
-    SELECT cl.capture_date, cl.source_campaign, cl.ad_key,
-           bp.booking_id, bp.is_cancelled, bp.attended_class, bp.class_date,
-           1 AS by_id
-    FROM book_pool bp
-    JOIN cohort_leads cl
-           ON cl.lead_key = bp.leads_contact_utm_id
-          AND bp.booked_date BETWEEN cl.capture_date AND cl.window_end
+    SELECT * FROM book_pool_utm
     UNION ALL
-    SELECT lbp.capture_date, lbp.source_campaign, lbp.ad_key,
-           bp.booking_id, bp.is_cancelled, bp.attended_class, bp.class_date,
-           0 AS by_id
-    FROM book_pool bp
-    LEFT JOIN cohort_leads c2 ON c2.lead_key = bp.leads_contact_utm_id
-    JOIN lead_by_parent lbp
-           ON lbp.parent_id = bp.parent_id
-          AND bp.booked_date BETWEEN lbp.capture_date AND lbp.window_end
-    WHERE c2.lead_key IS NULL          -- anti-join: unstamped, or stamped at a
+    SELECT * FROM book_pool_parent
+),
+
+-- Scoped schedules by Lead UTM ID (index seek)
+sched_pool_utm AS (
+    SELECT
+        cl.capture_date, cl.source_campaign, cl.ad_key,
+        csb.id AS booking_id, csb.attended_class
+    FROM cohort_leads cl
+    JOIN classschedulebookings csb ON csb.leads_contact_utm_id = cl.lead_key AND csb.deleted_at IS NULL
+    JOIN classschedules cs ON csb.classschedule_id = cs.id AND cs.deleted_at IS NULL
+    JOIN classes c ON cs.class_id = c.id AND c.deleted_at IS NULL
+    WHERE csb.demo_class = 'Yes' AND csb.is_cancelled = 'No'
+      AND c.category_id <> '31' AND c.is_workshop = 'no'
+      AND c.class_name NOT LIKE '%MOCK DEMO%' AND c.class_name NOT LIKE '%TEACHER NAME%'
+      AND cs.class_date >= CAST(cl.capture_date AS DATETIME)
+      AND cs.class_date <  DATE_ADD(CAST(cl.window_end AS DATETIME), INTERVAL 1 DAY)
+),
+
+-- Scoped schedules by Parent Mobile (index seek)
+sched_pool_parent AS (
+    SELECT
+        lbp.capture_date, lbp.source_campaign, lbp.ad_key,
+        csb.id AS booking_id, csb.attended_class
+    FROM lead_by_parent lbp
+    JOIN classschedulebookings csb ON csb.parent_id = lbp.parent_id AND csb.deleted_at IS NULL
+    JOIN classschedules cs ON csb.classschedule_id = cs.id AND cs.deleted_at IS NULL
+    JOIN classes c ON cs.class_id = c.id AND c.deleted_at IS NULL
+    LEFT JOIN cohort_leads c2 ON c2.lead_key = csb.leads_contact_utm_id
+    WHERE csb.demo_class = 'Yes' AND csb.is_cancelled = 'No'
+      AND c.category_id <> '31' AND c.is_workshop = 'no'
+      AND c.class_name NOT LIKE '%MOCK DEMO%' AND c.class_name NOT LIKE '%TEACHER NAME%'
+      AND cs.class_date >= CAST(lbp.capture_date AS DATETIME)
+      AND cs.class_date <  DATE_ADD(CAST(lbp.window_end AS DATETIME), INTERVAL 1 DAY)
+      AND c2.lead_key IS NULL
 ),
 
 sched_attr AS (
-    SELECT cl.capture_date, cl.source_campaign, cl.ad_key,
-           sp.booking_id, sp.attended_class
-    FROM sched_pool sp
-    JOIN cohort_leads cl
-           ON cl.lead_key = sp.leads_contact_utm_id
-          AND sp.class_date BETWEEN cl.capture_date AND cl.window_end
+    SELECT * FROM sched_pool_utm
     UNION ALL
-    SELECT lbp.capture_date, lbp.source_campaign, lbp.ad_key,
-           sp.booking_id, sp.attended_class
-    FROM sched_pool sp
-    LEFT JOIN cohort_leads c2 ON c2.lead_key = sp.leads_contact_utm_id
-    JOIN lead_by_parent lbp
-           ON lbp.parent_id = sp.parent_id
-          AND sp.class_date BETWEEN lbp.capture_date AND lbp.window_end
-    WHERE c2.lead_key IS NULL
+    SELECT * FROM sched_pool_parent
 ),
 
 lead_counts AS (
@@ -163,7 +179,7 @@ Demo_Scheduled AS (
 ),
 
 prior AS (
-    SELECT i.parent_id, MIN(DATE(i.created_at)) AS first_invoice
+    SELECT i.parent_id, MIN(i.created_at) AS first_invoice_ts
     FROM invoices i
     JOIN scoped_parents sp ON sp.parent_id = i.parent_id
     WHERE i.invoice_type = 'regular'
@@ -171,7 +187,7 @@ prior AS (
 ),
 
 attended_pool AS (
-    SELECT DISTINCT csb.parent_id, DATE(cs.class_date) AS attended_date
+    SELECT DISTINCT csb.parent_id, cs.class_date AS attended_ts
     FROM classschedulebookings csb
     JOIN classschedules cs ON csb.classschedule_id = cs.id AND cs.deleted_at IS NULL
     JOIN classes c         ON cs.class_id = c.id           AND c.deleted_at IS NULL
@@ -196,6 +212,11 @@ Converted AS (
                              AND i.invoice_type='regular'
                              AND pr.parent_id IS NOT NULL
                             THEN i.parent_id END)                        AS conversions_existing_family,
+        COUNT(DISTINCT CASE WHEN i.type_of_booking IN ('New','Token')
+                             AND i.invoice_type='regular'
+                             AND pr.parent_id IS NULL
+                             AND ap.parent_id IS NOT NULL
+                            THEN i.parent_id END)                        AS conversions_after_demo,
         COUNT(DISTINCT CASE WHEN i.type_of_booking='Repeat' AND i.invoice_type='regular'
                             THEN i.parent_id END)                        AS repeat_conversions,
         COUNT(DISTINCT CASE WHEN i.type_of_booking='New' AND i.invoice_type='regular'
@@ -215,27 +236,15 @@ Converted AS (
                  ELSE 0 END)                                             AS repeat_revenue
     FROM lead_by_parent lbp
     JOIN invoices i ON i.parent_id = lbp.parent_id
-                   AND DATE(i.created_at) BETWEEN lbp.capture_date AND lbp.window_end
+                   AND i.created_at >= CAST(lbp.capture_date AS DATETIME)
+                   AND i.created_at < DATE_ADD(CAST(lbp.window_end AS DATETIME), INTERVAL 1 DAY)
     LEFT JOIN currencies curr ON i.currency = curr.currency
     LEFT JOIN prior pr ON pr.parent_id = i.parent_id
-                      AND pr.first_invoice < lbp.capture_date
+                      AND pr.first_invoice_ts < CAST(lbp.capture_date AS DATETIME)
+    LEFT JOIN attended_pool ap ON ap.parent_id = lbp.parent_id
+                              AND ap.attended_ts >= CAST(lbp.capture_date AS DATETIME)
+                              AND ap.attended_ts < DATE_ADD(CAST(lbp.window_end AS DATETIME), INTERVAL 1 DAY)
     WHERE i.type_of_booking IN ('New','Token','Repeat')
-    GROUP BY 1,2,3
-),
-
-conv_after_demo AS (
-    SELECT lbp.capture_date, lbp.source_campaign, lbp.ad_key,
-           COUNT(DISTINCT i.parent_id) AS conversions_after_demo
-    FROM lead_by_parent lbp
-    JOIN invoices i ON i.parent_id = lbp.parent_id
-                   AND DATE(i.created_at) BETWEEN lbp.capture_date AND lbp.window_end
-    LEFT JOIN prior pr ON pr.parent_id = i.parent_id
-                      AND pr.first_invoice < lbp.capture_date
-    JOIN attended_pool ap ON ap.parent_id = lbp.parent_id
-                         AND ap.attended_date BETWEEN lbp.capture_date AND lbp.window_end
-    WHERE i.type_of_booking IN ('New','Token')
-      AND i.invoice_type = 'regular'
-      AND pr.parent_id IS NULL
     GROUP BY 1,2,3
 ),
 
@@ -265,6 +274,10 @@ fb_ad AS (
     GROUP BY 1,2,3,4,5
 ),
 
+max_fb_sync AS (
+    SELECT MAX(capture_date) AS max_sync_date FROM facebookads
+),
+
 campaign_funnel AS (
     SELECT
         lc.capture_date AS target_date,
@@ -280,7 +293,7 @@ campaign_funnel AS (
         COALESCE(cv.conversions_incl_existing,0)      AS conversions_incl_existing,
         COALESCE(cv.conversions_first_time,0)         AS conversions_first_time,
         COALESCE(cv.conversions_existing_family,0)    AS conversions_existing_family,
-        COALESCE(cad.conversions_after_demo,0)        AS conversions_after_demo,
+        COALESCE(cv.conversions_after_demo,0)         AS conversions_after_demo,
         COALESCE(cv.repeat_conversions,0)             AS repeat_conversions,
         COALESCE(cv.new_units,0)                      AS new_units,
         COALESCE(cv.new_revenue,0)                    AS new_revenue,
@@ -299,10 +312,6 @@ campaign_funnel AS (
            ON cv.capture_date = lc.capture_date
           AND cv.source_campaign = lc.source_campaign
           AND cv.ad_key <=> lc.ad_key
-    LEFT JOIN conv_after_demo cad
-           ON cad.capture_date = lc.capture_date
-          AND cad.source_campaign = lc.source_campaign
-          AND cad.ad_key <=> lc.ad_key
 ),
 
 detail AS (
@@ -403,10 +412,10 @@ SELECT
     ROUND(100 * SUM(d.clicks) / NULLIF(SUM(d.impressions),0), 2)     AS ctr,
     SUM(d.fb_results)                                                AS fb_results
 FROM detail d
+CROSS JOIN max_fb_sync mf
 WHERE 1=1
   [[AND d.campaign_name IN ({{campaign_nm}})]]
   [[AND d.ad_name       = {{ad_nm}}]]
   [[AND d.country_code  = {{country_cd}}]]
   [[AND d.traffic_type LIKE {{traffic}}]]
-  [[AND d.d1 <= (SELECT MAX(DATE(a.capture_date)) FROM facebookads a)
-    AND {{synced_only}} = 'Y']];
+  [[AND d.d1 <= mf.max_sync_date AND {{synced_only}} = 'Y']];
