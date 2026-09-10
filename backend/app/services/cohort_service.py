@@ -10,6 +10,7 @@ from backend.app.models.schemas import (
 )
 from backend.app.services.mock_data import get_raw_seed_data
 from backend.app.services.sql_engine import sql_engine
+from backend.app.services.cache_manager import cache_manager
 from backend.app.core.database import check_db_connection
 
 logger = logging.getLogger(__name__)
@@ -21,26 +22,23 @@ class CohortAnalyticsService:
         self.lead_records = self._generate_lead_data()
         self.lead_status_overrides: Dict[str, Dict[str, Any]] = {}
         
-        # In-memory query response cache (TTL: 600s)
-        self._cache: Dict[str, Dict[str, Any]] = {}
+        # Start async pre-warmer if loop is available
+        try:
+            cache_manager.start_background_prewarmer(self)
+        except Exception:
+            pass
 
     def _get_cache_key(self, prefix: str, filters: FilterParams) -> str:
         slicers = sorted(filters.slicers or [])
         return f"{prefix}:{filters.cohort_period}:{filters.date_from}:{filters.date_to}:{slicers}:{filters.campaign_names}:{filters.countries}"
 
-    def _get_from_cache(self, key: str) -> Optional[Any]:
-        if key in self._cache:
-            entry = self._cache[key]
-            if time.time() - entry["ts"] < 600:
-                return entry["data"]
-            del self._cache[key]
-        return None
+    def _get_from_cache(self, key: str, force_refresh: bool = False) -> Optional[Any]:
+        if force_refresh:
+            return None
+        return cache_manager.get(key)
 
     def _set_cache(self, key: str, data: Any):
-        self._cache[key] = {
-            "ts": time.time(),
-            "data": data
-        }
+        cache_manager.set(key, data)
 
     def _generate_spend_data(self) -> List[Dict[str, Any]]:
         records = []
@@ -157,6 +155,11 @@ class CohortAnalyticsService:
         return matching_indices
 
     def get_maturity_data(self, cohort_period: str, filters: FilterParams) -> CohortMaturityResponse:
+        cache_key = self._get_cache_key("maturity", filters)
+        cached = self._get_from_cache(cache_key, force_refresh=bool(filters.force_refresh))
+        if cached:
+            return cached
+
         offset = self._parse_cohort_offset(cohort_period)
         start_str = filters.date_from or "2026-08-07"
         end_str = filters.date_to or "2026-08-31"
@@ -207,7 +210,7 @@ class CohortAnalyticsService:
         else:
             note = f"For cohort D{offset}, {dropped_count} days are dropped (window not yet closed) to prevent false performance drops."
 
-        return CohortMaturityResponse(
+        res = CohortMaturityResponse(
             selected_cohort=cohort_period,
             refresh_date=datetime.now().strftime("%Y-%m-%dT%H:%M:%S"),
             total_dates=days,
@@ -216,10 +219,12 @@ class CohortAnalyticsService:
             note=note,
             days=days_list
         )
+        self._set_cache(cache_key, res)
+        return res
 
     def calculate_cohort_performance(self, filters: FilterParams) -> CohortMasterResponse:
         cache_key = self._get_cache_key("master", filters)
-        cached = self._get_from_cache(cache_key)
+        cached = self._get_from_cache(cache_key, force_refresh=bool(filters.force_refresh))
         if cached:
             return cached
 

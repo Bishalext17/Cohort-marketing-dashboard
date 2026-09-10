@@ -179,5 +179,24 @@ class TestCohortDashboard(unittest.TestCase):
         self.assertIsNotNone(run_res.compiled_sql)
         self.assertGreaterEqual(run_res.duration_ms, 0)
 
+    def test_cache_manager_operations(self):
+        from backend.app.services.cache_manager import cache_manager
+        
+        # 1. Set and Get
+        cache_manager.set("test:key1", {"metric": 100}, ttl=60)
+        cached = cache_manager.get("test:key1")
+        self.assertIsNotNone(cached)
+        self.assertEqual(cached["metric"], 100)
+        
+        # 2. Invalidation
+        cache_manager.invalidate_prefix("test:")
+        self.assertIsNone(cache_manager.get("test:key1"))
+        
+        # 3. Stats
+        stats = cache_manager.get_stats()
+        self.assertIn("hits", stats)
+        self.assertIn("misses", stats)
+        self.assertIn("hit_ratio_pct", stats)
+
 if __name__ == "__main__":
     unittest.main()

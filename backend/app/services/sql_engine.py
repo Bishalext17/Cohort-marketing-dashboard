@@ -6,6 +6,7 @@ from sqlalchemy import text
 from backend.app.core.database import engine, check_db_connection
 from backend.app.core.config import settings
 from backend.app.models.schemas import FilterParams
+from backend.app.services.cache_manager import cache_manager
 import logging
 
 logger = logging.getLogger(__name__)
@@ -137,16 +138,15 @@ class SQLEngine:
             }
 
         # Check In-Memory Query Cache First
-        if settings.CACHE_ENABLED and compiled_sql in self._query_cache:
-            entry = self._query_cache[compiled_sql]
-            if time.time() - entry["ts"] < settings.CACHE_TTL_SECONDS:
-                logger.info("Serving SQL query results directly from in-memory cache (0 DB load).")
-                cached_res = dict(entry["res"])
-                cached_res["duration_ms"] = round((time.time() - start_time) * 1000, 2)
-                cached_res["cached"] = True
-                return cached_res
-            else:
-                del self._query_cache[compiled_sql]
+        cache_key = f"sql:{compiled_sql}"
+        if settings.CACHE_ENABLED:
+            cached_res = cache_manager.get(cache_key)
+            if cached_res:
+                logger.info("Serving SQL query results directly from cache_manager (0 DB load).")
+                res = dict(cached_res)
+                res["duration_ms"] = round((time.time() - start_time) * 1000, 2)
+                res["cached"] = True
+                return res
 
         if not check_db_connection() or not engine:
             return {
@@ -184,10 +184,7 @@ class SQLEngine:
                 }
                 
                 if settings.CACHE_ENABLED:
-                    self._query_cache[compiled_sql] = {
-                        "ts": time.time(),
-                        "res": res
-                    }
+                    cache_manager.set(cache_key, res)
                     
                 return res
         except Exception as e:

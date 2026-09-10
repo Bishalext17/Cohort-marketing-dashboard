@@ -202,6 +202,30 @@ class CohortApp {
       });
     }
 
+    // Force Refresh Live DB
+    const refreshBtn = document.getElementById("refreshDataBtn");
+    if (refreshBtn) {
+      refreshBtn.addEventListener("click", async () => {
+        const icon = document.getElementById("refreshIcon");
+        if (icon) {
+          icon.style.transition = "transform 0.8s ease";
+          icon.style.transform = "rotate(360deg)";
+        }
+        refreshBtn.disabled = true;
+        refreshBtn.style.opacity = "0.6";
+        this.state.force_refresh = true;
+        
+        await this.refreshDashboard();
+        
+        this.state.force_refresh = false;
+        refreshBtn.disabled = false;
+        refreshBtn.style.opacity = "1";
+        if (icon) {
+          setTimeout(() => { icon.style.transform = "none"; }, 800);
+        }
+      });
+    }
+
     // Reset All Filters
     const resetBtn = document.getElementById("resetAll");
     if (resetBtn) {
@@ -409,15 +433,32 @@ class CohortApp {
   }
 
   async refreshMasterTable() {
+    const t0 = performance.now();
     try {
       const res = await (window.authFetch || fetch)("/api/v1/cohorts/master", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(this.state)
       });
+      const t1 = performance.now();
+      const durationMs = Math.round(t1 - t0);
+
       this.currentTableData = await res.json();
       this.tableState.page = 1;
       this.renderTableContent();
+
+      const cacheBadge = document.getElementById("cacheBadge");
+      if (cacheBadge) {
+        if (durationMs < 40 && !this.state.force_refresh) {
+          cacheBadge.style.background = "rgba(99,102,241,0.12)";
+          cacheBadge.style.color = "var(--brand)";
+          cacheBadge.innerText = `⚡ Cached (${durationMs}ms)`;
+        } else {
+          cacheBadge.style.background = "rgba(16,185,129,0.12)";
+          cacheBadge.style.color = "var(--teal)";
+          cacheBadge.innerText = `🟢 Live DB (${durationMs}ms)`;
+        }
+      }
     } catch (e) {
       console.error("Error refreshing master table:", e);
     }

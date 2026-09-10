@@ -7,6 +7,7 @@ from backend.app.api.v1.metadata import router as metadata_router
 from backend.app.api.v1.devices import router as devices_router
 from backend.app.api.v1.followups import router as followups_router
 from backend.app.api.v1.query_runner import router as query_runner_router
+from backend.app.api.v1.cache import router as cache_router
 
 api_v1_router = APIRouter()
 
@@ -21,5 +22,6 @@ api_v1_router.include_router(metadata_router, dependencies=protected_dependency)
 api_v1_router.include_router(devices_router, dependencies=protected_dependency)
 api_v1_router.include_router(followups_router, dependencies=protected_dependency)
 api_v1_router.include_router(query_runner_router, dependencies=protected_dependency)
+api_v1_router.include_router(cache_router, dependencies=protected_dependency)
 
 

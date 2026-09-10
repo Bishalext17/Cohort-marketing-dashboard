@@ -16,6 +16,7 @@ class FilterParams(BaseModel):
     ad_ids: Optional[List[str]] = None
     ad_names: Optional[List[str]] = None
     slicers: Optional[List[str]] = Field(default_factory=list, description="Group by dimensions e.g. ['date', 'campaign', 'adset', 'ad', 'country', 'course']")
+    force_refresh: Optional[bool] = Field(default=False, description="Bypass cache and query live database")
 
 class KPITile(BaseModel):
     key: str

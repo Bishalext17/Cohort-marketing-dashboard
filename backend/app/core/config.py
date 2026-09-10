@@ -37,10 +37,12 @@ class Settings(BaseSettings):
         escaped_pass = urllib.parse.quote_plus(self.MARIADB_PASSWORD)
         return f"mysql+pymysql://{escaped_user}:{escaped_pass}@{self.MARIADB_HOST}:{self.MARIADB_PORT}/{self.MARIADB_DATABASE}?charset=utf8mb4"
     
-    # Feature flags
+    # Feature flags & Caching
     MOCK_DATA_FALLBACK: bool = True
     CACHE_ENABLED: bool = True
-    CACHE_TTL_SECONDS: int = 3600
+    CACHE_TTL_SECONDS: int = 3600 # 1 hour default TTL
+    CACHE_PREWARM_ENABLED: bool = True
+    CACHE_PREWARM_INTERVAL_MINUTES: int = 30
     
     # CORS
     CORS_ORIGINS: List[str] = ["*"]
