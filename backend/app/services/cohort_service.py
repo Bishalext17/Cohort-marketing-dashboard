@@ -247,39 +247,149 @@ class CohortAnalyticsService:
                 }
                 res = sql_engine.execute_query(raw_sql, params)
                 if res.get("success") and res.get("rows"):
-                    rows = []
-                    totals = None
+                    # Slicers requested (defaults to ["date"] if empty)
+                    slicers = filters.slicers if (filters.slicers and len(filters.slicers) > 0) else ["date"]
                     
+                    dim_labels = {
+                        "date": "Lead Capture Date",
+                        "campaign": "Campaign Name",
+                        "adset": "Ad Set Name",
+                        "ad": "Ad Name",
+                        "country": "Country",
+                        "channel": "Channel",
+                        "platform": "Platform",
+                        "course": "Course"
+                    }
+                    headers = [{"key": s, "label": dim_labels.get(s, s.replace("_", " ").title())} for s in slicers]
+                    headers.extend([
+                        {"key": "spend", "label": "Spend (₹)"},
+                        {"key": "impressions", "label": "Impressions"},
+                        {"key": "clicks", "label": "Clicks"},
+                        {"key": "contacts_registered", "label": "Contacts Reg."},
+                        {"key": "cpl", "label": "CPL (₹)"},
+                        {"key": "demos_booked", "label": "Demos Booked"},
+                        {"key": "demos_attended", "label": "Demos Attended"},
+                        {"key": "attendance_pct", "label": "Attendance %"},
+                        {"key": "conversions", "label": "Conversions"},
+                        {"key": "conversion_pct", "label": "Conversion %"},
+                        {"key": "new_revenue", "label": "New Rev (₹)"},
+                        {"key": "arpu", "label": "ARPU (₹)"},
+                        {"key": "roas", "label": "ROAS"}
+                    ])
+
+                    groups: Dict[str, Dict[str, Any]] = {}
+                    tot_spend = 0.0
+                    tot_imp = 0
+                    tot_clk = 0
+                    tot_ct = 0
+                    tot_bk = 0
+                    tot_sc = 0
+                    tot_at = 0
+                    tot_cv = 0
+                    tot_rv = 0.0
+
                     for r in res["rows"]:
                         row_type = str(r.get("row_type") or "").strip().upper()
+                        if row_type == "TOTAL":
+                            continue
+
+                        capture_date = str(r.get("lead_capture_date") or r.get("d1") or r.get("lead_capture_period") or "")
+                        campaign = str(r.get("campaign_name") or r.get("campaign") or "")
+                        adset = str(r.get("adset_name") or r.get("adsets_merged") or r.get("adset") or "")
+                        ad = str(r.get("ad_name") or r.get("ad") or "")
+                        country = str(r.get("country_code") or r.get("country") or "")
+
+                        if filters.campaign_names and campaign not in filters.campaign_names:
+                            continue
+                        if filters.adset_names and adset not in filters.adset_names:
+                            continue
+                        if filters.ad_names and ad not in filters.ad_names:
+                            continue
+                        if filters.countries and country not in filters.countries:
+                            continue
+
                         sp = float(r.get("spend") or 0.0)
                         imp = int(r.get("impressions") or 0)
                         clk = int(r.get("clicks") or 0)
                         ct = int(r.get("contacts_registered") or 0)
-                        cpl = float(r.get("cpl") or (round(sp / ct, 2) if ct > 0 else 0.0))
                         bk = int(r.get("demos_booked") or 0)
                         sc = int(r.get("demos_scheduled") or 0)
                         at = int(r.get("demos_attended") or 0)
-                        att_pct = float(r.get("att_pct_of_booked") or r.get("att_pct") or (round(at / ct * 100, 2) if ct > 0 else 0.0))
-                        cv = int(r.get("conversions") or 0)
-                        conv_pct = float(r.get("conversion_pct") or (round(cv / ct * 100, 2) if ct > 0 else 0.0))
-                        rv = float(r.get("new_revenue") or 0.0)
-                        arpu = float(r.get("arpu") or (round(rv / cv, 2) if cv > 0 else 0.0))
-                        roas = float(r.get("roas_first_time") or r.get("new_revenue_roas") or (round(rv / sp, 2) if sp > 0 else 0.0))
-                        ctr = float(r.get("ctr") or (round(clk / imp * 100, 2) if imp > 0 else 0.0))
-                        
-                        capture_date = str(r.get("lead_capture_period") or r.get("lead_capture_date") or "")
-                        campaign = str(r.get("campaign") or "")
-                        ad = str(r.get("ad") or "")
-                        country = str(r.get("country") or "")
+                        cv = int(r.get("conversions") or r.get("conversions_first_time") or 0)
+                        rv = float(r.get("new_revenue") or r.get("new_revenue_first_time") or 0.0)
 
-                        row_obj = CohortTableRow(
-                            dimensions={
-                                "date": capture_date,
-                                "campaign": campaign,
-                                "ad": ad,
-                                "country": country
-                            },
+                        dim_vals = {}
+                        for s in slicers:
+                            if s == "date":
+                                dim_vals["date"] = capture_date
+                            elif s == "campaign":
+                                dim_vals["campaign"] = campaign
+                            elif s == "adset":
+                                dim_vals["adset"] = adset
+                            elif s == "ad":
+                                dim_vals["ad"] = ad
+                            elif s == "country":
+                                dim_vals["country"] = country
+                            else:
+                                dim_vals[s] = str(r.get(s) or "")
+
+                        group_key = json.dumps(dim_vals, sort_keys=True)
+                        if group_key not in groups:
+                            groups[group_key] = {
+                                "dimensions": dim_vals,
+                                "spend": 0.0,
+                                "impressions": 0,
+                                "clicks": 0,
+                                "contacts_registered": 0,
+                                "demos_booked": 0,
+                                "demos_scheduled": 0,
+                                "demos_attended": 0,
+                                "conversions": 0,
+                                "new_revenue": 0.0
+                            }
+
+                        g = groups[group_key]
+                        g["spend"] += sp
+                        g["impressions"] += imp
+                        g["clicks"] += clk
+                        g["contacts_registered"] += ct
+                        g["demos_booked"] += bk
+                        g["demos_scheduled"] += sc
+                        g["demos_attended"] += at
+                        g["conversions"] += cv
+                        g["new_revenue"] += rv
+
+                        tot_spend += sp
+                        tot_imp += imp
+                        tot_clk += clk
+                        tot_ct += ct
+                        tot_bk += bk
+                        tot_sc += sc
+                        tot_at += at
+                        tot_cv += cv
+                        tot_rv += rv
+
+                    rows = []
+                    for key, g in groups.items():
+                        sp = round(g["spend"], 2)
+                        imp = g["impressions"]
+                        clk = g["clicks"]
+                        ct = g["contacts_registered"]
+                        bk = g["demos_booked"]
+                        sc = g["demos_scheduled"]
+                        at = g["demos_attended"]
+                        cv = g["conversions"]
+                        rv = round(g["new_revenue"], 2)
+
+                        cpl = round((sp / ct), 2) if ct > 0 else 0.0
+                        ctr = round((clk / imp * 100), 2) if imp > 0 else 0.0
+                        att_pct = round((at / ct * 100), 2) if ct > 0 else 0.0
+                        conv_pct = round((cv / ct * 100), 2) if ct > 0 else 0.0
+                        arpu = round((rv / cv), 2) if cv > 0 else 0.0
+                        roas = round((rv / sp), 2) if sp > 0 else 0.0
+
+                        rows.append(CohortTableRow(
+                            dimensions=g["dimensions"],
                             spend=sp,
                             impressions=imp,
                             clicks=clk,
@@ -295,61 +405,26 @@ class CohortAnalyticsService:
                             new_revenue=rv,
                             arpu=arpu,
                             roas=roas
-                        )
+                        ))
 
-                        if row_type == "TOTAL":
-                            row_obj.dimensions = {"date": "TOTAL", "label": "TOTAL"}
-                            totals = row_obj
-                        else:
-                            rows.append(row_obj)
-                    
-                    if not totals and rows:
-                        tot_spend = sum(r.spend for r in rows)
-                        tot_imp = sum(r.impressions for r in rows)
-                        tot_clicks = sum(r.clicks for r in rows)
-                        tot_contacts = sum(r.contacts_registered for r in rows)
-                        tot_booked = sum(r.demos_booked for r in rows)
-                        tot_sched = sum(r.demos_scheduled for r in rows)
-                        tot_att = sum(r.demos_attended for r in rows)
-                        tot_conv = sum(r.conversions for r in rows)
-                        tot_rev = sum(r.new_revenue for r in rows)
-                        
-                        totals = CohortTableRow(
-                            dimensions={"date": "TOTAL", "label": "TOTAL"},
-                            spend=round(tot_spend, 2),
-                            impressions=tot_imp,
-                            clicks=tot_clicks,
-                            contacts_registered=tot_contacts,
-                            ctr_pct=round(tot_clicks / tot_imp * 100, 2) if tot_imp > 0 else 0.0,
-                            cpl=round(tot_spend / tot_contacts, 2) if tot_contacts > 0 else 0.0,
-                            demos_booked=tot_booked,
-                            demos_scheduled=tot_sched,
-                            demos_attended=tot_att,
-                            attendance_pct=round(tot_att / tot_contacts * 100, 2) if tot_contacts > 0 else 0.0,
-                            conversions=tot_conv,
-                            conversion_pct=round(tot_conv / tot_contacts * 100, 2) if tot_contacts > 0 else 0.0,
-                            new_revenue=round(tot_rev, 2),
-                            arpu=round(tot_rev / tot_conv, 2) if tot_conv > 0 else 0.0,
-                            roas=round(tot_rev / tot_spend, 2) if tot_spend > 0 else 0.0
-                        )
-
-                    headers = [
-                        {"key": "date", "label": "Lead Capture Date"},
-                        {"key": "spend", "label": "Spend (₹)"},
-                        {"key": "impressions", "label": "Impressions"},
-                        {"key": "clicks", "label": "Clicks"},
-                        {"key": "contacts_registered", "label": "Contacts Reg."},
-                        {"key": "cpl", "label": "CPL (₹)"},
-                        {"key": "demos_booked", "label": "Demos Booked"},
-                        {"key": "demos_attended", "label": "Demos Attended"},
-                        {"key": "attendance_pct", "label": "Attendance %"},
-                        {"key": "conversions", "label": "Conversions"},
-                        {"key": "conversion_pct", "label": "Conversion %"},
-                        {"key": "new_revenue", "label": "New Rev (₹)"},
-                        {"key": "arpu", "label": "ARPU (₹)"},
-                        {"key": "roas", "label": "ROAS"}
-                    ]
-
+                    totals = CohortTableRow(
+                        dimensions={slicers[0]: "TOTAL", "label": "TOTAL"},
+                        spend=round(tot_spend, 2),
+                        impressions=tot_imp,
+                        clicks=tot_clk,
+                        contacts_registered=tot_ct,
+                        ctr_pct=round((tot_clk / tot_imp * 100), 2) if tot_imp > 0 else 0.0,
+                        cpl=round((tot_spend / tot_ct), 2) if tot_ct > 0 else 0.0,
+                        demos_booked=tot_bk,
+                        demos_scheduled=tot_sc,
+                        demos_attended=tot_at,
+                        attendance_pct=round((tot_at / tot_ct * 100), 2) if tot_ct > 0 else 0.0,
+                        conversions=tot_cv,
+                        conversion_pct=round((tot_cv / tot_ct * 100), 2) if tot_ct > 0 else 0.0,
+                        new_revenue=round(tot_rv, 2),
+                        arpu=round((tot_rv / tot_cv), 2) if tot_cv > 0 else 0.0,
+                        roas=round((tot_rv / tot_spend), 2) if tot_spend > 0 else 0.0
+                    )
 
                     response = CohortMasterResponse(
                         headers=headers,

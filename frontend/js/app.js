@@ -164,7 +164,7 @@ class CohortApp {
             this.state.slicers.push(key);
             btn.classList.add("on");
           }
-          this.refreshMasterTable();
+          this.refreshDashboard();
         });
       });
     }
@@ -343,7 +343,7 @@ class CohortApp {
           <td colspan="15">
             <div class="tbl-spinner">
               <div class="spinner-icon"></div>
-              <span>Executing cohort slice query against live database...</span>
+              <span>Executing master cohort query against live database...</span>
             </div>
           </td>
         </tr>
@@ -532,7 +532,12 @@ class CohortApp {
       let dimHtml = "";
       data.headers.forEach((h, i) => {
         if (r.dimensions && r.dimensions[h.key] !== undefined) {
-          dimHtml += `<td class="${i === 0 ? 'stick dim' : 'dim'}">${r.dimensions[h.key]}</td>`;
+          const val = r.dimensions[h.key];
+          if (["campaign", "adset", "ad"].includes(h.key) && val && val !== "All" && val !== "NA" && val !== "Not Available") {
+            dimHtml += `<td class="${i === 0 ? 'stick dim' : 'dim'}"><button class="tbl-link-btn" onclick="cohortApp.filterByDimension('${h.key}', '${encodeURIComponent(val)}')" title="Click to filter by ${val}">${val}</button></td>`;
+          } else {
+            dimHtml += `<td class="${i === 0 ? 'stick dim' : 'dim'}">${val}</td>`;
+          }
         }
       });
 
@@ -630,120 +635,34 @@ class CohortApp {
     }
   }
 
-  // SQL Query Studio
-  async setupQueryStudio() {
-    this.loadQueryStudioList();
+  filterByDimension(dimKey, encodedVal) {
+    const val = decodeURIComponent(encodedVal);
+    const keyMap = {
+      campaign: "campaign_names",
+      adset: "adset_names",
+      ad: "ad_names"
+    };
+    const stateKey = keyMap[dimKey];
+    if (!stateKey) return;
+
+    if (this.state[stateKey] && this.state[stateKey].includes(val)) {
+      this.state[stateKey] = [];
+    } else {
+      this.state[stateKey] = [val];
+    }
+    this.refreshDashboard();
   }
 
-  async loadQueryStudioList() {
-    try {
-      const res = await (window.authFetch || fetch)("/api/v1/queries");
-      this.availableQueries = await res.json();
-      const listEl = document.getElementById("queryStudioList");
-      if (!listEl) return;
-
-      listEl.innerHTML = this.availableQueries.map(q => `
-        <div class="query-item" data-path="${q.relative_path}" onclick="cohortApp.selectQuery('${q.relative_path}')">
-          <div class="q-title">${q.title}</div>
-          <div class="q-meta">${q.category} · ${q.filename}</div>
-        </div>
-      `).join("");
-
-      if (this.availableQueries.length > 0 && !this.selectedQuery) {
-        this.selectQuery(this.availableQueries[0].relative_path);
-      }
-    } catch (e) {
-      console.error("Error loading query studio list:", e);
-    }
+  filterByCampaign(encodedCampName) {
+    this.filterByDimension("campaign", encodedCampName);
   }
 
-  async selectQuery(path) {
-    this.selectedQuery = path;
-    document.querySelectorAll(".query-item").forEach(item => {
-      item.classList.toggle("active", item.dataset.path === path);
-    });
-
-    try {
-      const res = await (window.authFetch || fetch)(`/api/v1/queries/template?path=${encodeURIComponent(path)}`);
-      const data = await res.json();
-      const editor = document.getElementById("sqlQueryEditor");
-      if (editor) editor.value = data.sql;
-    } catch (e) {
-      console.error("Error loading query template:", e);
-    }
+  filterByAdset(encodedAdsetName) {
+    this.filterByDimension("adset", encodedAdsetName);
   }
 
-  async runActiveQuery() {
-    const editor = document.getElementById("sqlQueryEditor");
-    const timingBadge = document.getElementById("queryTimingBadge");
-    const resultsContainer = document.getElementById("queryResultsContainer");
-
-    const cohortDays = parseInt(document.getElementById("qsCohortDays").value || "9999", 10);
-    const fromDate = document.getElementById("qsFromDate").value || "2026-07-01";
-    const toDate = document.getElementById("qsToDate").value || "2026-07-31";
-    const slice1 = document.getElementById("qsSlice1") ? document.getElementById("qsSlice1").value : "campaign";
-
-    if (timingBadge) {
-      timingBadge.style.display = "inline-flex";
-      timingBadge.innerText = "Executing query...";
-    }
-
-    try {
-      const res = await (window.authFetch || fetch)("/api/v1/queries/run", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          custom_sql: editor ? editor.value : null,
-          cohort_days: cohortDays,
-          from_date: fromDate,
-          to_date: toDate,
-          slice_1: slice1,
-          slice_2: "none"
-        })
-      });
-      const data = await res.json();
-
-      if (timingBadge) {
-        timingBadge.innerText = `⏱️ ${data.duration_ms} ms · ${data.row_count} rows`;
-      }
-
-      if (resultsContainer) {
-        if (!data.success && data.error) {
-          resultsContainer.innerHTML = `
-            <div style="padding:16px;background:var(--warn-soft);border:1px solid var(--warn-line);border-radius:var(--radius-sm);color:#9A3412;">
-              <b>Execution Notice:</b> ${data.error}
-              <div style="margin-top:8px;font-size:11px;font-family:var(--mono);color:#64748B;">Compiled SQL Preview Available Below</div>
-            </div>
-            <pre style="background:#0F172A;color:#E2E8F0;padding:14px;border-radius:var(--radius-md);overflow:auto;font-size:11px;margin-top:10px;">${data.compiled_sql}</pre>
-          `;
-          return;
-        }
-
-        if (data.rows.length === 0) {
-          resultsContainer.innerHTML = `<div style="padding:24px;text-align:center;color:var(--ink3);">Query executed successfully with 0 rows returned.</div>`;
-          return;
-        }
-
-        // Render result table
-        resultsContainer.innerHTML = `
-          <div class="tbl-wrap" style="max-height:450px;">
-            <table>
-              <thead>
-                <tr>${data.columns.map(c => `<th>${c}</th>`).join("")}</tr>
-              </thead>
-              <tbody>
-                ${data.rows.map(r => `
-                  <tr>${data.columns.map(c => `<td>${r[c] !== null && r[c] !== undefined ? r[c] : ''}</td>`).join("")}</tr>
-                `).join("")}
-              </tbody>
-            </table>
-          </div>
-        `;
-      }
-    } catch (e) {
-      console.error("Error executing query:", e);
-      if (timingBadge) timingBadge.innerText = "Error";
-    }
+  filterByAd(encodedAdName) {
+    this.filterByDimension("ad", encodedAdName);
   }
 
   downloadTableCSV() {

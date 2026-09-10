@@ -617,6 +617,24 @@ td {
 tbody tr:hover td { background: #F8FAFC; }
 td.num { text-align: right; font-family: var(--mono); font-weight: 500; }
 td.dim { font-weight: 600; color: var(--ink); }
+.tbl-link-btn {
+  background: none;
+  border: none;
+  padding: 0;
+  font-family: inherit;
+  font-size: inherit;
+  font-weight: 600;
+  color: var(--petrol);
+  cursor: pointer;
+  text-decoration: underline;
+  text-decoration-color: rgba(2, 132, 199, 0.3);
+  text-underline-offset: 2px;
+  transition: all 0.15s ease;
+}
+.tbl-link-btn:hover {
+  color: var(--petrol-dark);
+  text-decoration-color: var(--petrol);
+}
 
 /* Sticky first column */
 th.stick, td.stick {
