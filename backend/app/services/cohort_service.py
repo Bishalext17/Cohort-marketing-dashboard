@@ -1,13 +1,16 @@
 from typing import Dict, Any, List, Optional
-from datetime import datetime
+from datetime import datetime, timedelta
 import json
+import logging
+import time
 from backend.app.models.schemas import (
     FilterParams, KPITile, KPITilesResponse, CohortTableRow, CohortMasterResponse,
     MaturityDay, CohortMaturityResponse, DeviceComparisonResponse, DeviceMetric,
     FollowUpContact, FollowUpListResponse
 )
 from backend.app.services.mock_data import get_raw_seed_data
-import logging
+from backend.app.services.sql_engine import sql_engine
+from backend.app.core.database import check_db_connection
 
 logger = logging.getLogger(__name__)
 
@@ -16,17 +19,36 @@ class CohortAnalyticsService:
         self.raw = get_raw_seed_data()
         self.spend_records = self._generate_spend_data()
         self.lead_records = self._generate_lead_data()
+        self.lead_status_overrides: Dict[str, Dict[str, Any]] = {}
+        
+        # In-memory query response cache (TTL: 600s)
+        self._cache: Dict[str, Dict[str, Any]] = {}
+
+    def _get_cache_key(self, prefix: str, filters: FilterParams) -> str:
+        slicers = sorted(filters.slicers or [])
+        return f"{prefix}:{filters.cohort_period}:{filters.date_from}:{filters.date_to}:{slicers}:{filters.campaign_names}:{filters.countries}"
+
+    def _get_from_cache(self, key: str) -> Optional[Any]:
+        if key in self._cache:
+            entry = self._cache[key]
+            if time.time() - entry["ts"] < 600:
+                return entry["data"]
+            del self._cache[key]
+        return None
+
+    def _set_cache(self, key: str, data: Any):
+        self._cache[key] = {
+            "ts": time.time(),
+            "data": data
+        }
 
     def _generate_spend_data(self) -> List[Dict[str, Any]]:
-        # Generates realistic spend at (day, combo_idx) grain
         records = []
         combos = self.raw["combos"]
         days = self.raw["meta"]["days"]
         
-        # Deterministic seed multipliers
         for d in range(days):
             for c_idx, combo in enumerate(combos):
-                # Pseudo-deterministic spend formula matching reference
                 base_spend = 1200 + ((d * 37 + c_idx * 73) % 4500)
                 impressions = int(base_spend * (3.5 + ((d + c_idx) % 4)))
                 clicks = int(impressions * (0.015 + ((c_idx % 5) * 0.003)))
@@ -44,7 +66,6 @@ class CohortAnalyticsService:
         return records
 
     def _generate_lead_data(self) -> List[Dict[str, Any]]:
-        # Generates lead-level records: [lead_id, day, combo_idx, booked_d, sched_d, att_d, conv_d, rev]
         leads = []
         lead_counter = 100000
         days = self.raw["meta"]["days"]
@@ -52,35 +73,26 @@ class CohortAnalyticsService:
 
         for d in range(days):
             for c_idx, combo in enumerate(combos):
-                country_idx = combo[4] # 3 is IN
-                course_idx = combo[6]
+                country_idx = combo[4]
                 num_leads = 2 + ((d * 7 + c_idx * 11) % 18)
                 
                 for i in range(num_leads):
                     lead_counter += 1
                     lead_id = f"LD{lead_counter}"
                     
-                    # Funnel offsets
-                    # Booked offset
-                    has_booked = (lead_counter % 10) < 6 # 60% book
+                    has_booked = (lead_counter % 10) < 6
                     booked_d = (lead_counter % 3) if has_booked else -1
-                    
-                    # Scheduled offset
                     sched_d = (booked_d + (lead_counter % 2)) if has_booked else -1
                     
-                    # Attended offset
-                    # iOS vs Android variation
                     is_ios = (lead_counter % 3) == 0
-                    att_chance = 33 if is_ios else 25 # attendance gap
+                    att_chance = 33 if is_ios else 25
                     has_attended = has_booked and ((lead_counter * 13) % 100 < att_chance)
                     att_d = (sched_d + (lead_counter % 3)) if has_attended else -1
                     
-                    # Converted offset
                     conv_chance = 35 if (has_attended and is_ios) else (14 if has_attended else 0)
                     has_conv = has_attended and ((lead_counter * 17) % 100 < conv_chance)
                     conv_d = (att_d + (lead_counter % 4)) if has_conv else -1
                     
-                    # Revenue
                     base_price = 45000 if country_idx != 3 else 18500
                     rev = base_price if has_conv else 0.0
 
@@ -99,7 +111,7 @@ class CohortAnalyticsService:
 
     def _parse_cohort_offset(self, cohort_period: str) -> Optional[int]:
         if not cohort_period or cohort_period.lower() == "till date":
-            return None # None represents Till Date
+            return None
         if cohort_period.upper().startswith("D"):
             try:
                 return int(cohort_period[1:])
@@ -146,17 +158,32 @@ class CohortAnalyticsService:
 
     def get_maturity_data(self, cohort_period: str, filters: FilterParams) -> CohortMaturityResponse:
         offset = self._parse_cohort_offset(cohort_period)
-        days = self.raw["meta"]["days"]
-        start_date = datetime.strptime(self.raw["meta"]["start"], "%Y-%m-%d")
+        start_str = filters.date_from or "2026-08-07"
+        end_str = filters.date_to or "2026-08-31"
         
-        valid_combos = set(self.filter_combos(filters))
+        try:
+            start_date = datetime.strptime(start_str, "%Y-%m-%d")
+            end_date = datetime.strptime(end_str, "%Y-%m-%d")
+            days = max(1, (end_date - start_date).days + 1)
+        except Exception:
+            start_date = datetime(2026, 8, 7)
+            end_date = datetime(2026, 8, 31)
+            days = 25
+            
+        today = datetime.now()
         days_list = []
         counted_count = 0
         dropped_count = 0
 
         for d in range(days):
-            curr_date = start_date.replace(day=d+1).strftime("%Y-%m-%d")
-            is_mature = True if offset is None else (d + offset < days)
+            curr_date_dt = start_date + timedelta(days=d)
+            curr_date = curr_date_dt.strftime("%Y-%m-%d")
+            
+            if offset is None:
+                is_mature = True
+            else:
+                is_mature = (curr_date_dt + timedelta(days=offset) <= today)
+                
             status = "counted" if is_mature else "dropped"
             
             if is_mature:
@@ -164,32 +191,15 @@ class CohortAnalyticsService:
             else:
                 dropped_count += 1
             
-            # Aggregate stats for day
-            day_leads = [
-                ld for ld in self.lead_records 
-                if ld["day"] == d and ld["combo_idx"] in valid_combos
-            ]
-            
-            leads_cnt = len(day_leads)
-            if is_mature:
-                max_d = 999999 if offset is None else offset
-                att_cnt = sum(1 for ld in day_leads if 0 <= ld["att_d"] <= max_d)
-                conv_cnt = sum(1 for ld in day_leads if 0 <= ld["conv_d"] <= max_d)
-                rev = sum(ld["revenue"] for ld in day_leads if 0 <= ld["conv_d"] <= max_d)
-            else:
-                att_cnt = 0
-                conv_cnt = 0
-                rev = 0.0
-
             days_list.append(MaturityDay(
                 date=curr_date,
                 day_num=d+1,
                 status=status,
                 is_mature=is_mature,
-                leads_captured=leads_cnt,
-                attended_count=att_cnt,
-                conversions_count=conv_cnt,
-                revenue=rev
+                leads_captured=0,
+                attended_count=0,
+                conversions_count=0,
+                revenue=0.0
             ))
 
         if offset is None:
@@ -199,7 +209,7 @@ class CohortAnalyticsService:
 
         return CohortMaturityResponse(
             selected_cohort=cohort_period,
-            refresh_date=self.raw["meta"]["lastUpdated"],
+            refresh_date=datetime.now().strftime("%Y-%m-%dT%H:%M:%S"),
             total_dates=days,
             counted_dates=counted_count,
             dropped_dates=dropped_count,
@@ -208,54 +218,209 @@ class CohortAnalyticsService:
         )
 
     def calculate_cohort_performance(self, filters: FilterParams) -> CohortMasterResponse:
+        cache_key = self._get_cache_key("master", filters)
+        cached = self._get_from_cache(cache_key)
+        if cached:
+            return cached
+
+        # Check if live database is connected
+        if check_db_connection():
+            try:
+                from_date = filters.date_from or "2026-08-07"
+                to_date = filters.date_to or "2026-08-31"
+                offset = self._parse_cohort_offset(filters.cohort_period)
+                cohort_days = 9999 if offset is None else offset
+                
+                # Determine slice dimensions
+                slicers = filters.slicers or ["date"]
+                slice_1 = "date"
+                if "campaign" in slicers:
+                    slice_1 = "campaign"
+                elif "country" in slicers:
+                    slice_1 = "country"
+                elif "ad" in slicers:
+                    slice_1 = "ad"
+                elif "date" in slicers or "lead_capture_date" in slicers:
+                    slice_1 = "date"
+                    
+                slice_2 = "none"
+                if len(slicers) > 1:
+                    s2_cands = [s for s in slicers if s != slice_1 and s in ("date", "campaign", "ad", "country")]
+                    if s2_cands:
+                        slice_2 = s2_cands[0]
+                
+                raw_sql = sql_engine.read_query("01_production/20_slice_by_optimised.sql")
+                params = {
+                    "from_date": from_date,
+                    "to_date": to_date,
+                    "cohort_days": cohort_days,
+                    "slice_1": slice_1,
+                    "slice_2": slice_2,
+                    "campaign_nm": filters.campaign_names if filters.campaign_names else None,
+                    "ad_nm": filters.ad_names if filters.ad_names else None,
+                    "country_cd": filters.countries[0] if (filters.countries and len(filters.countries) == 1) else None
+                }
+                res = sql_engine.execute_query(raw_sql, params)
+                if res.get("success") and res.get("rows"):
+                    rows = []
+                    tot_spend = 0.0
+                    tot_imp = 0
+                    tot_clicks = 0
+                    tot_contacts = 0
+                    tot_booked = 0
+                    tot_sched = 0
+                    tot_att = 0
+                    tot_conv = 0
+                    tot_rev = 0.0
+                    
+                    for r in res["rows"]:
+                        sp = float(r.get("spend") or 0.0)
+                        imp = int(r.get("impressions") or 0)
+                        clk = int(r.get("clicks") or 0)
+                        ct = int(r.get("contacts_registered") or 0)
+                        bk = int(r.get("demos_booked") or 0)
+                        sc = int(r.get("demos_scheduled") or 0)
+                        at = int(r.get("demos_attended") or 0)
+                        cv = int(r.get("conversions") or 0)
+                        rv = float(r.get("new_revenue") or 0.0)
+                        
+                        ctr = float(r.get("ctr") or (round(clk / imp * 100, 2) if imp > 0 else 0.0))
+                        cpl = float(r.get("cpl") or (round(sp / ct, 2) if ct > 0 else 0.0))
+                        att_pct = float(r.get("att_pct") or (round(at / ct * 100, 2) if ct > 0 else 0.0))
+                        conv_pct = float(r.get("conversion_pct") or (round(cv / ct * 100, 2) if ct > 0 else 0.0))
+                        arpu = float(r.get("arpu") or (round(rv / cv, 2) if cv > 0 else 0.0))
+                        roas = float(r.get("total_roas") or (round(rv / sp, 2) if sp > 0 else 0.0))
+                        
+                        dim_val = {slice_1: str(r.get("slice_1"))}
+                        if slice_2 != "none":
+                            dim_val[slice_2] = str(r.get("slice_2"))
+                            
+                        rows.append(CohortTableRow(
+                            dimensions=dim_val,
+                            spend=sp,
+                            impressions=imp,
+                            clicks=clk,
+                            contacts_registered=ct,
+                            ctr_pct=ctr,
+                            cpl=cpl,
+                            demos_booked=bk,
+                            demos_scheduled=sc,
+                            demos_attended=at,
+                            attendance_pct=att_pct,
+                            conversions=cv,
+                            conversion_pct=conv_pct,
+                            new_revenue=rv,
+                            arpu=arpu,
+                            roas=roas
+                        ))
+                        
+                        tot_spend += sp
+                        tot_imp += imp
+                        tot_clicks += clk
+                        tot_contacts += ct
+                        tot_booked += bk
+                        tot_sched += sc
+                        tot_att += at
+                        tot_conv += cv
+                        tot_rev += rv
+                        
+                    tot_ctr = round((tot_clicks / tot_imp * 100), 2) if tot_imp > 0 else 0.0
+                    tot_cpl = round((tot_spend / tot_contacts), 2) if tot_contacts > 0 else 0.0
+                    tot_att_pct = round((tot_att / tot_contacts * 100), 2) if tot_contacts > 0 else 0.0
+                    tot_conv_pct = round((tot_conv / tot_contacts * 100), 2) if tot_contacts > 0 else 0.0
+                    tot_arpu = round((tot_rev / tot_conv), 2) if tot_conv > 0 else 0.0
+                    tot_roas = round((tot_rev / tot_spend), 2) if tot_spend > 0 else 0.0
+
+                    totals = CohortTableRow(
+                        dimensions={"label": "TOTAL"},
+                        spend=round(tot_spend, 2),
+                        impressions=tot_imp,
+                        clicks=tot_clicks,
+                        contacts_registered=tot_contacts,
+                        ctr_pct=tot_ctr,
+                        cpl=tot_cpl,
+                        demos_booked=tot_booked,
+                        demos_scheduled=tot_sched,
+                        demos_attended=tot_att,
+                        attendance_pct=tot_att_pct,
+                        conversions=tot_conv,
+                        conversion_pct=tot_conv_pct,
+                        new_revenue=round(tot_rev, 2),
+                        arpu=tot_arpu,
+                        roas=tot_roas
+                    )
+                    
+                    headers = [{"key": slice_1, "label": slice_1.title()}]
+                    if slice_2 != "none":
+                        headers.append({"key": slice_2, "label": slice_2.title()})
+                    headers.extend([
+                        {"key": "spend", "label": "Spend (₹)"},
+                        {"key": "impressions", "label": "Impressions"},
+                        {"key": "clicks", "label": "Clicks"},
+                        {"key": "contacts_registered", "label": "Contacts Reg."},
+                        {"key": "cpl", "label": "CPL (₹)"},
+                        {"key": "demos_booked", "label": "Demos Booked"},
+                        {"key": "demos_attended", "label": "Demos Attended"},
+                        {"key": "attendance_pct", "label": "Attendance %"},
+                        {"key": "conversions", "label": "Conversions"},
+                        {"key": "conversion_pct", "label": "Conversion %"},
+                        {"key": "new_revenue", "label": "New Rev (₹)"},
+                        {"key": "arpu", "label": "ARPU (₹)"},
+                        {"key": "roas", "label": "ROAS"}
+                    ])
+
+                    response = CohortMasterResponse(
+                        headers=headers,
+                        rows=rows,
+                        totals=totals,
+                        row_count=len(rows),
+                        applied_cohort=filters.cohort_period,
+                        applied_filters=filters.model_dump()
+                    )
+                    self._set_cache(cache_key, response)
+                    return response
+            except Exception as e:
+                logger.error(f"Error executing live sliced query, falling back to simulator: {e}")
+
+        # Fallback to simulation
         offset = self._parse_cohort_offset(filters.cohort_period)
         days = self.raw["meta"]["days"]
         start_date = datetime.strptime(self.raw["meta"]["start"], "%Y-%m-%d")
         valid_combos = set(self.filter_combos(filters))
         
-        # Identify mature days
         mature_days = set()
         for d in range(days):
             if offset is None or (d + offset < days):
                 mature_days.add(d)
 
-        # Build groupings based on slicers
         slicers = filters.slicers or []
         groups: Dict[str, Dict[str, Any]] = {}
 
-        # 1. Aggregate spend at mature days & valid combos
         for sp in self.spend_records:
             if sp["day"] not in mature_days or sp["combo_idx"] not in valid_combos:
                 continue
-            
             c_idx = sp["combo_idx"]
             combo = self.raw["combos"][c_idx]
             dim_values = self._extract_dimension_values(sp["day"], combo, slicers, start_date)
             group_key = json.dumps(dim_values, sort_keys=True)
-
             if group_key not in groups:
                 groups[group_key] = self._init_group_data(dim_values)
-
             g = groups[group_key]
             g["spend"] += sp["spend"]
             g["impressions"] += sp["impressions"]
             g["clicks"] += sp["clicks"]
             g["contacts_registered"] += sp["contacts_registered"]
 
-        # 2. Aggregate leads & cohort events
         max_d = 999999 if offset is None else offset
         for ld in self.lead_records:
             if ld["day"] not in mature_days or ld["combo_idx"] not in valid_combos:
                 continue
-
             c_idx = ld["combo_idx"]
             combo = self.raw["combos"][c_idx]
             dim_values = self._extract_dimension_values(ld["day"], combo, slicers, start_date)
             group_key = json.dumps(dim_values, sort_keys=True)
-
             if group_key not in groups:
                 groups[group_key] = self._init_group_data(dim_values)
-
             g = groups[group_key]
             if 0 <= ld["booked_d"] <= max_d:
                 g["demos_booked"] += 1
@@ -267,7 +432,6 @@ class CohortAnalyticsService:
                 g["conversions"] += 1
                 g["new_revenue"] += ld["revenue"]
 
-        # 3. Compute derived ratios for each row
         rows: List[CohortTableRow] = []
         tot_spend = 0.0
         tot_imp = 0
@@ -326,7 +490,6 @@ class CohortAnalyticsService:
             tot_conv += conv
             tot_rev += rev
 
-        # 4. Totals row (recalculates all ratios)
         tot_ctr = round((tot_clicks / tot_imp * 100), 2) if tot_imp > 0 else 0.0
         tot_cpl = round((tot_spend / tot_contacts), 2) if tot_contacts > 0 else 0.0
         tot_att_pct = round((tot_att / tot_contacts * 100), 2) if tot_contacts > 0 else 0.0
@@ -353,11 +516,9 @@ class CohortAnalyticsService:
             roas=tot_roas
         )
 
-        # Build table headers
         headers = []
         for s in slicers:
             headers.append({"key": s, "label": s.replace("_", " ").title()})
-        
         headers.extend([
             {"key": "spend", "label": "Spend (₹)"},
             {"key": "impressions", "label": "Impressions"},
@@ -374,19 +535,39 @@ class CohortAnalyticsService:
             {"key": "roas", "label": "ROAS"}
         ])
 
-        return CohortMasterResponse(
+        response = CohortMasterResponse(
             headers=headers,
             rows=rows,
             totals=totals,
             row_count=len(rows),
             applied_cohort=filters.cohort_period,
-            applied_filters=filters.dict()
+            applied_filters=filters.model_dump()
         )
+        self._set_cache(cache_key, response)
+        return response
 
     def get_kpis(self, filters: FilterParams) -> KPITilesResponse:
-        master = self.calculate_cohort_performance(filters)
-        tot = master.totals
+        # Check master table cache first
+        master_key = self._get_cache_key("master", filters)
+        cached_master = self._get_from_cache(master_key)
+        if cached_master:
+            tot = cached_master.totals
+            return self._build_kpi_response(tot, filters.cohort_period)
 
+        # Check if live database is connected
+        if check_db_connection():
+            try:
+                # Use calculate_cohort_performance to compute and cache everything at once!
+                master = self.calculate_cohort_performance(filters)
+                return self._build_kpi_response(master.totals, filters.cohort_period)
+            except Exception as e:
+                logger.error(f"Error executing live KPI query, falling back: {e}")
+
+        # Fallback to simulation
+        master = self.calculate_cohort_performance(filters)
+        return self._build_kpi_response(master.totals, filters.cohort_period)
+
+    def _build_kpi_response(self, tot: CohortTableRow, cohort_period: str) -> KPITilesResponse:
         return KPITilesResponse(
             spend=KPITile(
                 key="spend",
@@ -417,7 +598,7 @@ class CohortAnalyticsService:
                 label="Demos Attended",
                 value=f"{tot.demos_attended:,}",
                 numeric_value=float(tot.demos_attended),
-                description=f"Attended demos in {filters.cohort_period}",
+                description=f"Attended demos in {cohort_period}",
                 format_type="number"
             ),
             attendance_pct=KPITile(
@@ -433,7 +614,7 @@ class CohortAnalyticsService:
                 label="Conversions",
                 value=f"{tot.conversions:,}",
                 numeric_value=float(tot.conversions),
-                description=f"Paying customers in {filters.cohort_period}",
+                description=f"Paying customers in {cohort_period}",
                 format_type="number"
             ),
             conversion_pct=KPITile(
@@ -449,7 +630,7 @@ class CohortAnalyticsService:
                 label="New Revenue",
                 value=f"₹{tot.new_revenue:,.2f}",
                 numeric_value=tot.new_revenue,
-                description=f"Revenue realized in {filters.cohort_period}",
+                description=f"Revenue realized in {cohort_period}",
                 format_type="currency"
             ),
             arpu=KPITile(
@@ -471,7 +652,7 @@ class CohortAnalyticsService:
             impressions=KPITile(
                 key="impressions",
                 label="Impressions",
-                value=f"{tot.impressions:,}",
+                value=f"{int(tot.impressions):,}",
                 numeric_value=float(tot.impressions),
                 description="Total ad impressions",
                 format_type="number"
@@ -479,7 +660,7 @@ class CohortAnalyticsService:
             clicks=KPITile(
                 key="clicks",
                 label="Clicks",
-                value=f"{tot.clicks:,}",
+                value=f"{int(tot.clicks):,}",
                 numeric_value=float(tot.clicks),
                 description="Total ad clicks",
                 format_type="number"
@@ -495,7 +676,6 @@ class CohortAnalyticsService:
         )
 
     def get_device_comparison(self) -> DeviceComparisonResponse:
-        # iOS vs Android diagnostic
         ios_leads = [ld for ld in self.lead_records if ld["is_ios"]]
         android_leads = [ld for ld in self.lead_records if not ld["is_ios"]]
         
@@ -581,16 +761,22 @@ class CohortAnalyticsService:
             status_label = "Converted" if converted else ("Attended (Unpaid)" if attended else ("Booked (Not Attended)" if ld["booked_d"] >= 0 else "Registered"))
             priority = "High" if attended and not converted else ("Medium" if ld["booked_d"] >= 0 else "Low")
 
-            # Fake phone generator with privacy masking
             phone_suffix = 1000 + (i % 9000)
             phone = f"+91 98765 {phone_suffix}"
             parent_name = f"Parent_{ld['lead_id']}"
+
+            override = self.lead_status_overrides.get(ld["lead_id"], {})
+            if override.get("status"):
+                status_label = override["status"]
+            if override.get("followup_priority"):
+                priority = override["followup_priority"]
+            notes = override.get("notes")
 
             contacts.append(FollowUpContact(
                 lead_id=ld["lead_id"],
                 phone=phone,
                 parent_name=parent_name,
-                lead_date=f"2026-07-{(ld['day'] % 31) + 1:02d}",
+                lead_date=(datetime.strptime(self.raw["meta"]["start"], "%Y-%m-%d") + timedelta(days=ld["day"])).strftime("%Y-%m-%d"),
                 course=course_name,
                 campaign_name=camp_name,
                 os_family=os_name,
@@ -599,7 +785,8 @@ class CohortAnalyticsService:
                 converted=converted,
                 amount=ld["revenue"],
                 days_since_lead=ld["day"],
-                followup_priority=priority
+                followup_priority=priority,
+                notes=notes
             ))
 
         tot_amount = sum(c.amount for c in contacts)
@@ -610,6 +797,22 @@ class CohortAnalyticsService:
             contacts=contacts
         )
 
+    def update_lead_status(self, lead_id: str, status: Optional[str] = None, priority: Optional[str] = None, notes: Optional[str] = None) -> Optional[FollowUpContact]:
+        if lead_id not in self.lead_status_overrides:
+            self.lead_status_overrides[lead_id] = {}
+        if status is not None:
+            self.lead_status_overrides[lead_id]["status"] = status
+        if priority is not None:
+            self.lead_status_overrides[lead_id]["followup_priority"] = priority
+        if notes is not None:
+            self.lead_status_overrides[lead_id]["notes"] = notes
+        
+        all_contacts = self.get_followup_contacts("all").contacts
+        for c in all_contacts:
+            if c.lead_id == lead_id:
+                return c
+        return None
+
     def _extract_dimension_values(self, day: int, combo: List[int], slicers: List[str], start_date: datetime) -> Dict[str, Any]:
         if not slicers:
             return {"All": "Total Portfolio"}
@@ -617,7 +820,7 @@ class CohortAnalyticsService:
         values = {}
         for s in slicers:
             if s in ("date", "lead_date", "lead_capture_date"):
-                values["date"] = start_date.replace(day=day+1).strftime("%Y-%m-%d")
+                values["date"] = (start_date + timedelta(days=day)).strftime("%Y-%m-%d")
             elif s == "channel":
                 values["channel"] = self.raw["channels"][combo[3]]
             elif s == "platform":

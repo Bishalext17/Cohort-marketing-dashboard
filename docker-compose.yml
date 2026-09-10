@@ -1,0 +1,20 @@
+version: '3.8'
+
+services:
+  cohort-dashboard:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: cohort-marketing-dashboard
+    restart: always
+    ports:
+      - "127.0.0.1:8000:8000"
+    env_file:
+      - ./backend/.env
+    environment:
+      - PORT=8000
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3

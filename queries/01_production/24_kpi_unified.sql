@@ -365,14 +365,17 @@ SELECT
 
     SUM(d.demos_booked)                                              AS demos_booked,
     SUM(d.demos_booked_held)                                         AS demos_booked_held,
-    SUM(d.demos_booked_attended)                                     AS demos_attended,
+    SUM(d.demos_booked_attended)                                     AS demos_booked_attended,
     ROUND(100 * SUM(d.demos_booked_attended)
               / NULLIF(SUM(d.demos_booked),0), 1)                    AS att_pct,
     ROUND(100 * SUM(d.demos_booked_attended)
               / NULLIF(SUM(d.demos_booked_held),0), 1)               AS att_pct_of_held,
     SUM(d.demos_scheduled)                                           AS demos_scheduled,
+    SUM(d.demos_attended)                                            AS demos_attended,
     ROUND(100 * SUM(d.demos_attended)
               / NULLIF(SUM(d.demos_scheduled),0), 1)                 AS show_up_rate_pct,
+    ROUND(100 * SUM(d.demos_attended)
+              / NULLIF(SUM(d.contacts_registered),0), 1)             AS attended_per_lead_pct,
 
     SUM(d.conversions_first_time)                                    AS conversions,
     SUM(d.conversions_incl_existing)                                 AS conversions_incl_existing,

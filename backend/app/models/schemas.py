@@ -120,9 +120,46 @@ class FollowUpContact(BaseModel):
     amount: float
     days_since_lead: int
     followup_priority: str
+    notes: Optional[str] = None
 
 class FollowUpListResponse(BaseModel):
     category: str
     count: int
     total_potential_or_actual_revenue: float
     contacts: List[FollowUpContact]
+
+class UpdateLeadStatusRequest(BaseModel):
+    status: Optional[str] = None
+    followup_priority: Optional[str] = None
+    notes: Optional[str] = None
+
+class QueryFileItem(BaseModel):
+    filename: str
+    relative_path: str
+    category: str
+    title: str
+
+class QueryRunRequest(BaseModel):
+    query_path: Optional[str] = None
+    custom_sql: Optional[str] = None
+    cohort_days: int = 9999
+    from_date: str = "2026-07-01"
+    to_date: str = "2026-07-31"
+    campaign_nm: Optional[List[str]] = None
+    country_cd: Optional[str] = None
+    ad_nm: Optional[str] = None
+    traffic: Optional[str] = None
+    synced_only: Optional[str] = None
+    slice_1: Optional[str] = "campaign"
+    slice_2: Optional[str] = "none"
+
+class QueryRunResponse(BaseModel):
+    success: bool
+    executed: bool
+    error: Optional[str] = None
+    compiled_sql: str
+    columns: List[str]
+    rows: List[Dict[str, Any]]
+    row_count: int
+    duration_ms: float
+

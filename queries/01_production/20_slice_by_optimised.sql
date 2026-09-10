@@ -368,12 +368,16 @@ SELECT
     SUM(d.demos_booked)                                              AS demos_booked,
     SUM(d.demos_booked_held)                                         AS demos_booked_held,
     SUM(d.demos_booked_attended)                                     AS demos_booked_attended,
-    SUM(d.demos_scheduled)                                           AS demos_scheduled,
-    SUM(d.demos_attended)                                            AS demos_attended,
     ROUND(100 * SUM(d.demos_booked_attended)
               / NULLIF(SUM(d.demos_booked),0), 1)                    AS att_pct,
     ROUND(100 * SUM(d.demos_booked_attended)
               / NULLIF(SUM(d.demos_booked_held),0), 1)               AS att_pct_of_held,
+    SUM(d.demos_scheduled)                                           AS demos_scheduled,
+    SUM(d.demos_attended)                                            AS demos_attended,
+    ROUND(100 * SUM(d.demos_attended)
+              / NULLIF(SUM(d.demos_scheduled),0), 1)                 AS show_up_rate_pct,
+    ROUND(100 * SUM(d.demos_attended)
+              / NULLIF(SUM(d.contacts_registered),0), 1)             AS attended_per_lead_pct,
 
     SUM(d.conversions_first_time)                                    AS conversions,
     SUM(d.conversions_incl_existing)                                 AS conversions_incl_existing,
@@ -388,14 +392,18 @@ SELECT
     SUM(d.new_units)                                                 AS new_units,
     ROUND(SUM(d.new_revenue_first_time)
               / NULLIF(SUM(d.conversions_first_time),0))             AS arpu,
+    ROUND(SUM(d.new_revenue) / NULLIF(SUM(d.new_units),0))           AS aov,
     ROUND(SUM(d.new_revenue))                                        AS new_revenue,
     ROUND(SUM(d.new_revenue_first_time))                             AS new_revenue_first_time,
     ROUND(SUM(d.new_revenue_first_time) / NULLIF(SUM(d.spend),0), 2) AS roas_first_time,
     ROUND(SUM(d.new_revenue) / NULLIF(SUM(d.spend),0), 2)            AS new_revenue_roas,
+    ROUND((SUM(d.new_revenue) + SUM(d.repeat_revenue))
+              / NULLIF(SUM(d.spend),0), 2)                           AS total_roas,
 
     SUM(d.impressions)                                               AS impressions,
     SUM(d.clicks)                                                    AS clicks,
-    ROUND(100 * SUM(d.clicks) / NULLIF(SUM(d.impressions),0), 2)     AS ctr
+    ROUND(100 * SUM(d.clicks) / NULLIF(SUM(d.impressions),0), 2)     AS ctr,
+    SUM(d.fb_results)                                                AS fb_results
 FROM detail d
 WHERE 1=1
   [[AND d.campaign_name IN ({{campaign_nm}})]]

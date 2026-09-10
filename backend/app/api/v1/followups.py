@@ -1,5 +1,5 @@
-from fastapi import APIRouter, Query, Response
-from backend.app.models.schemas import FollowUpListResponse
+from fastapi import APIRouter, Query, Response, HTTPException
+from backend.app.models.schemas import FollowUpListResponse, FollowUpContact, UpdateLeadStatusRequest
 from backend.app.services.cohort_service import cohort_service
 import csv
 import io
@@ -11,6 +11,19 @@ def get_followup_contacts(category: str = Query("all", description="Category: al
     """Retrieve actionable contact lists for sales and admissions follow-up."""
     return cohort_service.get_followup_contacts(category)
 
+@router.patch("/{lead_id}", response_model=FollowUpContact)
+def update_lead_status(lead_id: str, req: UpdateLeadStatusRequest):
+    """Update CRM status, follow-up priority, and notes for a specific lead."""
+    updated = cohort_service.update_lead_status(
+        lead_id=lead_id,
+        status=req.status,
+        priority=req.followup_priority,
+        notes=req.notes
+    )
+    if not updated:
+        raise HTTPException(status_code=404, detail="Lead ID not found.")
+    return updated
+
 @router.get("/export-csv")
 def export_followup_csv(category: str = Query("all")):
     """Export filtered follow-up contacts directly to downloadable CSV."""
@@ -19,7 +32,7 @@ def export_followup_csv(category: str = Query("all")):
     writer = csv.writer(output)
     
     # CSV Header
-    writer.writerow(["Lead ID", "Parent Name", "Phone", "Lead Date", "Course", "Campaign", "OS", "Status", "Attended", "Converted", "Revenue (INR)", "Priority"])
+    writer.writerow(["Lead ID", "Parent Name", "Phone", "Lead Date", "Course", "Campaign", "OS", "Status", "Attended", "Converted", "Revenue (INR)", "Priority", "Notes"])
     
     for c in res.contacts:
         writer.writerow([
@@ -34,7 +47,8 @@ def export_followup_csv(category: str = Query("all")):
             "Yes" if c.attended else "No",
             "Yes" if c.converted else "No",
             c.amount,
-            c.followup_priority
+            c.followup_priority,
+            c.notes or ""
         ])
     
     csv_content = output.getvalue()
@@ -43,3 +57,4 @@ def export_followup_csv(category: str = Query("all")):
         media_type="text/csv",
         headers={"Content-Disposition": f"attachment; filename=followup_{category}.csv"}
     )
+
