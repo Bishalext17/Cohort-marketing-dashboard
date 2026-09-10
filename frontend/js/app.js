@@ -68,7 +68,7 @@ class CohortApp {
 
   async fetchMetadata() {
     try {
-      const res = await fetch("/api/v1/metadata");
+      const res = await (window.authFetch || fetch)("/api/v1/metadata");
       this.metadata = await res.json();
       
       this.state.channels = [...this.metadata.channels];
@@ -334,7 +334,7 @@ class CohortApp {
 
   async refreshMaturity() {
     try {
-      const res = await fetch("/api/v1/cohorts/maturity", {
+      const res = await (window.authFetch || fetch)("/api/v1/cohorts/maturity", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(this.state)
@@ -368,7 +368,7 @@ class CohortApp {
 
   async refreshKPIs() {
     try {
-      const res = await fetch("/api/v1/kpis", {
+      const res = await (window.authFetch || fetch)("/api/v1/kpis", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(this.state)
@@ -410,7 +410,7 @@ class CohortApp {
 
   async refreshMasterTable() {
     try {
-      const res = await fetch("/api/v1/cohorts/master", {
+      const res = await (window.authFetch || fetch)("/api/v1/cohorts/master", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(this.state)
@@ -584,7 +584,7 @@ class CohortApp {
 
   async loadDeviceDiagnostics() {
     try {
-      const res = await fetch("/api/v1/devices/comparison");
+      const res = await (window.authFetch || fetch)("/api/v1/devices/comparison");
       const data = await res.json();
       if (window.chartRenderer) {
         window.chartRenderer.renderDeviceComparison("deviceComparisonContainer", data);
@@ -601,7 +601,7 @@ class CohortApp {
 
   async loadQueryStudioList() {
     try {
-      const res = await fetch("/api/v1/queries");
+      const res = await (window.authFetch || fetch)("/api/v1/queries");
       this.availableQueries = await res.json();
       const listEl = document.getElementById("queryStudioList");
       if (!listEl) return;
@@ -628,7 +628,7 @@ class CohortApp {
     });
 
     try {
-      const res = await fetch(`/api/v1/queries/template?path=${encodeURIComponent(path)}`);
+      const res = await (window.authFetch || fetch)(`/api/v1/queries/template?path=${encodeURIComponent(path)}`);
       const data = await res.json();
       const editor = document.getElementById("sqlQueryEditor");
       if (editor) editor.value = data.sql;
@@ -653,7 +653,7 @@ class CohortApp {
     }
 
     try {
-      const res = await fetch("/api/v1/queries/run", {
+      const res = await (window.authFetch || fetch)("/api/v1/queries/run", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -743,6 +743,50 @@ document.addEventListener("click", () => {
   document.querySelectorAll(".dd").forEach(d => d.classList.remove("open"));
 });
 
-window.addEventListener("DOMContentLoaded", () => {
-  window.cohortApp = new CohortApp();
+// App lifecycle & Authentication bindings
+window.addEventListener("DOMContentLoaded", async () => {
+  // Setup login form submission
+  const loginForm = document.getElementById("loginForm");
+  if (loginForm) {
+    loginForm.addEventListener("submit", async (e) => {
+      e.preventDefault();
+      const u = document.getElementById("loginUsername").value.trim();
+      const p = document.getElementById("loginPassword").value;
+      if (u && p) {
+        await Auth.login(u, p);
+      }
+    });
+  }
+
+  // Setup password show/hide toggle
+  const btnTogglePw = document.getElementById("btnTogglePassword");
+  if (btnTogglePw) {
+    btnTogglePw.addEventListener("click", () => {
+      const pwInput = document.getElementById("loginPassword");
+      if (pwInput) {
+        const isPw = pwInput.type === "password";
+        pwInput.type = isPw ? "text" : "password";
+        btnTogglePw.innerHTML = isPw
+          ? `<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"></path><line x1="1" y1="1" x2="23" y2="23"></line></svg>`
+          : `<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path><circle cx="12" cy="12" r="3"></circle></svg>`;
+      }
+    });
+  }
+
+  // Setup logout button
+  const btnLogout = document.getElementById("btnLogout");
+  if (btnLogout) {
+    btnLogout.addEventListener("click", async () => {
+      if (confirm("Are you sure you want to sign out of the Marketing Suite?")) {
+        await Auth.logout();
+      }
+    });
+  }
+
+  // Verify session and load app
+  const isAuth = await Auth.verifyToken();
+  if (isAuth) {
+    window.cohortApp = new CohortApp();
+  }
 });
+

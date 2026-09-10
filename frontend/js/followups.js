@@ -28,7 +28,7 @@ class FollowUpManager {
     }
 
     try {
-      const res = await fetch(`/api/v1/followups?category=${category}`);
+      const res = await (window.authFetch || fetch)(`/api/v1/followups?category=${category}`);
       const data = await res.json();
       this.contactsData = data.contacts || [];
       
@@ -51,11 +51,12 @@ class FollowUpManager {
 
   async updateLead(leadId, patchData) {
     try {
-      const res = await fetch(`/api/v1/followups/${leadId}`, {
+      const res = await (window.authFetch || fetch)(`/api/v1/followups/${leadId}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(patchData)
       });
+
       if (res.ok) {
         const updated = await res.json();
         const idx = this.contactsData.findIndex(c => c.lead_id === leadId);
