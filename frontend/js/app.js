@@ -529,66 +529,99 @@ class CohortApp {
     // 2. Table Body
     const tbody = tbl.querySelector("tbody");
     tbody.innerHTML = pagedRows.map(r => {
-      let dimHtml = "";
+      let rowCells = "";
       data.headers.forEach((h, i) => {
-        if (r.dimensions && r.dimensions[h.key] !== undefined) {
-          const val = r.dimensions[h.key];
-          if (["campaign", "adset", "ad"].includes(h.key) && val && val !== "All" && val !== "NA" && val !== "Not Available") {
-            dimHtml += `<td class="${i === 0 ? 'stick dim' : 'dim'}"><button class="tbl-link-btn" onclick="cohortApp.filterByDimension('${h.key}', '${encodeURIComponent(val)}')" title="Click to filter by ${val}">${val}</button></td>`;
+        const isDim = ["date", "campaign", "adset", "ad", "channel", "platform", "country", "course"].includes(h.key);
+        if (isDim) {
+          const val = (r.dimensions && (r.dimensions[h.key] || r.dimensions[h.key + "_name"])) || "-";
+          if (["campaign", "adset", "ad"].includes(h.key) && val && val !== "All" && val !== "NA" && val !== "Not Available" && val !== "-") {
+            const extraId = (h.key === "campaign" && r.dimensions && r.dimensions.campaign_id) ? ` <span style="font-size:10px;color:var(--ink4);font-family:var(--mono);">(${r.dimensions.campaign_id})</span>` : "";
+            rowCells += `<td class="${i === 0 ? 'stick dim' : 'dim'}"><button class="tbl-link-btn" onclick="cohortApp.filterByDimension('${h.key}', '${encodeURIComponent(val)}')" title="Click to filter by ${val}">${val}</button>${extraId}</td>`;
           } else {
-            dimHtml += `<td class="${i === 0 ? 'stick dim' : 'dim'}">${val}</td>`;
+            rowCells += `<td class="${i === 0 ? 'stick dim' : 'dim'}">${val}</td>`;
+          }
+        } else {
+          // Metric Column
+          if (h.key === "spend") {
+            rowCells += `<td class="num">₹${(r.spend || 0).toLocaleString()}</td>`;
+          } else if (h.key === "impressions") {
+            rowCells += `<td class="num">${(r.impressions || 0).toLocaleString()}</td>`;
+          } else if (h.key === "clicks") {
+            rowCells += `<td class="num">${(r.clicks || 0).toLocaleString()}</td>`;
+          } else if (h.key === "contacts_registered") {
+            rowCells += `<td class="num"><b>${(r.contacts_registered || 0).toLocaleString()}</b></td>`;
+          } else if (h.key === "cpl") {
+            rowCells += `<td class="num">₹${(r.cpl || 0).toFixed(2)}</td>`;
+          } else if (h.key === "demos_booked") {
+            rowCells += `<td class="num">${(r.demos_booked || 0).toLocaleString()}</td>`;
+          } else if (h.key === "demos_attended") {
+            rowCells += `<td class="num">${(r.demos_attended || 0).toLocaleString()}</td>`;
+          } else if (h.key === "attendance_pct") {
+            rowCells += `<td class="num" style="background:${r.attendance_pct > 30 ? 'var(--teal-soft)' : ''}"><b>${(r.attendance_pct || 0).toFixed(1)}%</b></td>`;
+          } else if (h.key === "conversions") {
+            rowCells += `<td class="num">${(r.conversions || 0).toLocaleString()}</td>`;
+          } else if (h.key === "conversion_pct") {
+            rowCells += `<td class="num" style="background:${r.conversion_pct > 3 ? 'var(--teal-soft)' : ''}"><b>${(r.conversion_pct || 0).toFixed(2)}%</b></td>`;
+          } else if (h.key === "new_revenue") {
+            rowCells += `<td class="num" style="color:var(--petrol);font-weight:700;">₹${(r.new_revenue || 0).toLocaleString()}</td>`;
+          } else if (h.key === "arpu") {
+            rowCells += `<td class="num">₹${(r.arpu || 0).toLocaleString()}</td>`;
+          } else if (h.key === "roas") {
+            rowCells += `<td class="num" style="font-weight:700;">${(r.roas || 0).toFixed(2)}x</td>`;
+          } else {
+            rowCells += `<td class="num">${r[h.key] !== undefined ? r[h.key] : '-'}</td>`;
           }
         }
       });
 
-      return `
-        <tr>
-          ${dimHtml}
-          <td class="num">₹${r.spend.toLocaleString()}</td>
-          <td class="num">${r.impressions.toLocaleString()}</td>
-          <td class="num">${r.clicks.toLocaleString()}</td>
-          <td class="num"><b>${r.contacts_registered.toLocaleString()}</b></td>
-          <td class="num">₹${r.cpl.toFixed(2)}</td>
-          <td class="num">${r.demos_booked.toLocaleString()}</td>
-          <td class="num">${r.demos_attended.toLocaleString()}</td>
-          <td class="num" style="background:${r.attendance_pct > 30 ? 'var(--teal-soft)' : ''}"><b>${r.attendance_pct.toFixed(1)}%</b></td>
-          <td class="num">${r.conversions.toLocaleString()}</td>
-          <td class="num" style="background:${r.conversion_pct > 3 ? 'var(--teal-soft)' : ''}"><b>${r.conversion_pct.toFixed(2)}%</b></td>
-          <td class="num" style="color:var(--petrol);font-weight:700;">₹${r.new_revenue.toLocaleString()}</td>
-          <td class="num">₹${r.arpu.toLocaleString()}</td>
-          <td class="num" style="font-weight:700;">${r.roas.toFixed(2)}x</td>
-        </tr>
-      `;
+      return `<tr>${rowCells}</tr>`;
     }).join("");
 
     // 3. Table Footer (Totals row)
     const tfoot = tbl.querySelector("tfoot");
-    const tot = data.totals;
-    let footDimCols = "";
+    const tot = data.totals || {};
+    let footCells = "";
+    let isFirstDim = true;
+
     data.headers.forEach((h, i) => {
-      if (h.key in (tot.dimensions || {}) || i < (this.state.slicers.length || 1)) {
-        footDimCols += `<td class="${i === 0 ? 'stick dim' : 'dim'}">${i === 0 ? 'TOTAL' : ''}</td>`;
+      const isDim = ["date", "campaign", "adset", "ad", "channel", "platform", "country", "course"].includes(h.key);
+      if (isDim) {
+        footCells += `<td class="${i === 0 ? 'stick dim' : 'dim'}">${isFirstDim ? 'TOTAL' : ''}</td>`;
+        isFirstDim = false;
+      } else {
+        if (h.key === "spend") {
+          footCells += `<td class="num">₹${(tot.spend || 0).toLocaleString()}</td>`;
+        } else if (h.key === "impressions") {
+          footCells += `<td class="num">${(tot.impressions || 0).toLocaleString()}</td>`;
+        } else if (h.key === "clicks") {
+          footCells += `<td class="num">${(tot.clicks || 0).toLocaleString()}</td>`;
+        } else if (h.key === "contacts_registered") {
+          footCells += `<td class="num">${(tot.contacts_registered || 0).toLocaleString()}</td>`;
+        } else if (h.key === "cpl") {
+          footCells += `<td class="num">₹${(tot.cpl || 0).toFixed(2)}</td>`;
+        } else if (h.key === "demos_booked") {
+          footCells += `<td class="num">${(tot.demos_booked || 0).toLocaleString()}</td>`;
+        } else if (h.key === "demos_attended") {
+          footCells += `<td class="num">${(tot.demos_attended || 0).toLocaleString()}</td>`;
+        } else if (h.key === "attendance_pct") {
+          footCells += `<td class="num">${(tot.attendance_pct || 0).toFixed(1)}%</td>`;
+        } else if (h.key === "conversions") {
+          footCells += `<td class="num">${(tot.conversions || 0).toLocaleString()}</td>`;
+        } else if (h.key === "conversion_pct") {
+          footCells += `<td class="num">${(tot.conversion_pct || 0).toFixed(2)}%</td>`;
+        } else if (h.key === "new_revenue") {
+          footCells += `<td class="num">₹${(tot.new_revenue || 0).toLocaleString()}</td>`;
+        } else if (h.key === "arpu") {
+          footCells += `<td class="num">₹${(tot.arpu || 0).toLocaleString()}</td>`;
+        } else if (h.key === "roas") {
+          footCells += `<td class="num">${(tot.roas || 0).toFixed(2)}x</td>`;
+        } else {
+          footCells += `<td class="num">-</td>`;
+        }
       }
     });
 
-    tfoot.innerHTML = `
-      <tr>
-        ${footDimCols}
-        <td class="num">₹${tot.spend.toLocaleString()}</td>
-        <td class="num">${tot.impressions.toLocaleString()}</td>
-        <td class="num">${tot.clicks.toLocaleString()}</td>
-        <td class="num">${tot.contacts_registered.toLocaleString()}</td>
-        <td class="num">₹${tot.cpl.toFixed(2)}</td>
-        <td class="num">${tot.demos_booked.toLocaleString()}</td>
-        <td class="num">${tot.demos_attended.toLocaleString()}</td>
-        <td class="num">${tot.attendance_pct.toFixed(1)}%</td>
-        <td class="num">${tot.conversions.toLocaleString()}</td>
-        <td class="num">${tot.conversion_pct.toFixed(2)}%</td>
-        <td class="num">₹${tot.new_revenue.toLocaleString()}</td>
-        <td class="num">₹${tot.arpu.toLocaleString()}</td>
-        <td class="num">${tot.roas.toFixed(2)}x</td>
-      </tr>
-    `;
+    tfoot.innerHTML = `<tr>${footCells}</tr>`;
 
     this.renderPagination(filteredRows.length);
   }

@@ -888,14 +888,17 @@ class CohortAnalyticsService:
                 values["course"] = self.raw["courses"][combo[6]]
             elif s == "campaign":
                 camp = self.raw["campaigns"][combo[0]]
+                values["campaign"] = camp["name"]
                 values["campaign_id"] = camp["id"]
                 values["campaign_name"] = camp["name"]
             elif s == "adset":
                 adset = self.raw["adsets"][combo[1]]
+                values["adset"] = adset["name"]
                 values["adset_id"] = adset["id"]
                 values["adset_name"] = adset["name"]
             elif s == "ad":
                 ad = self.raw["ads"][combo[2]]
+                values["ad"] = ad["name"]
                 values["ad_id"] = ad["id"]
                 values["ad_name"] = ad["name"]
         return values
