@@ -330,14 +330,25 @@ class CohortApp {
       this.refreshDashboard();
     });
 
-    el.querySelectorAll(".dd-list input").forEach(inp => {
-      inp.addEventListener("change", () => {
-        const checked = Array.from(el.querySelectorAll(".dd-list input:checked")).map(i => i.value);
-        this.state[stateKey] = checked;
-        this.createDropdown(containerId, label, options, stateKey);
-        this.refreshDashboard();
+      el.querySelectorAll(".dd-list input").forEach(inp => {
+        inp.addEventListener("change", () => {
+          const checked = Array.from(el.querySelectorAll(".dd-list input:checked")).map(i => i.value);
+          this.state[stateKey] = checked;
+          this.createDropdown(containerId, label, options, stateKey);
+          this.triggerRefresh();
+        });
       });
-    });
+    }
+
+  triggerRefresh(immediate = false) {
+    if (this.refreshTimeout) clearTimeout(this.refreshTimeout);
+    if (immediate) {
+      this.refreshDashboard();
+    } else {
+      this.refreshTimeout = setTimeout(() => {
+        this.refreshDashboard();
+      }, 250);
+    }
   }
 
   async refreshDashboard() {
@@ -345,7 +356,7 @@ class CohortApp {
     this.showLoadingSkeletons();
     await Promise.all([
       this.refreshMaturity(),
-      this.refreshMasterTable().then(() => this.refreshKPIs())
+      this.refreshMasterTable()
     ]);
   }
 
@@ -448,45 +459,41 @@ class CohortApp {
     }
   }
 
-  async refreshKPIs() {
-    try {
-      const res = await (window.authFetch || fetch)("/api/v1/kpis", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(this.getEffectivePayload())
+  renderKPIsFromTotals(totals) {
+    if (!totals) return;
+    const kpiContainer = document.getElementById("kpis");
+    if (!kpiContainer) return;
+
+    const tiles = [
+      { label: "Spend", value: `₹${(totals.spend || 0).toLocaleString('en-IN', {minimumFractionDigits: 2, maximumFractionDigits: 2})}`, description: "Acquisition spend across mature days (fixed D0)" },
+      { label: "Contacts Registered", value: `${(totals.contacts_registered || 0).toLocaleString('en-IN')}`, description: "Total unique registered leads" },
+      { label: "Cost Per Lead (CPL)", value: `₹${(totals.cpl || 0).toFixed(2)}`, description: "Spend ÷ Contacts Registered" },
+      { label: "Demos Attended", value: `${(totals.demos_attended || 0).toLocaleString('en-IN')}`, description: `Attended demos in ${this.state.cohort_period}` },
+      { label: "Attendance Rate", value: `${(totals.attendance_pct || 0).toFixed(1)}%`, description: "Demos Attended ÷ Contacts Registered" },
+      { label: "Conversions", value: `${(totals.conversions || 0).toLocaleString('en-IN')}`, description: `Paying customers in ${this.state.cohort_period}` },
+      { label: "Conversion Rate", value: `${(totals.conversion_pct || 0).toFixed(2)}%`, description: "Conversions ÷ Contacts Registered" },
+      { label: "New Revenue", value: `₹${(totals.new_revenue || 0).toLocaleString('en-IN', {minimumFractionDigits: 2, maximumFractionDigits: 2})}`, description: `Revenue realized in ${this.state.cohort_period}` },
+      { label: "ARPU (Paying)", value: `₹${(totals.arpu || 0).toLocaleString('en-IN', {minimumFractionDigits: 2, maximumFractionDigits: 2})}`, description: "Revenue ÷ Conversions" },
+      { label: "New Rev ROAS", value: `${(totals.roas || 0).toFixed(2)}x`, description: "New Revenue ÷ Spend" }
+    ];
+
+    kpiContainer.innerHTML = tiles.map(t => `
+      <div class="kpi">
+        <div class="k">${t.label}</div>
+        <div class="v">${t.value}</div>
+        <div class="d">${t.description}</div>
+      </div>
+    `).join("");
+
+    if (window.chartRenderer) {
+      window.chartRenderer.renderFunnel("overviewFunnelChart", {
+        impressions: totals.impressions || 0,
+        clicks: totals.clicks || 0,
+        contacts_registered: totals.contacts_registered || 0,
+        demos_booked: totals.demos_booked || Math.round((totals.contacts_registered || 0) * 0.6),
+        demos_attended: totals.demos_attended || 0,
+        conversions: totals.conversions || 0
       });
-      const data = await res.json();
-      
-      const kpiContainer = document.getElementById("kpis");
-      if (!kpiContainer) return;
-
-      const tiles = [
-        data.spend, data.leads, data.cpl, data.demos_attended,
-        data.attendance_pct, data.conversions, data.conversion_pct,
-        data.revenue, data.arpu, data.roas
-      ];
-
-      kpiContainer.innerHTML = tiles.map(t => `
-        <div class="kpi">
-          <div class="k">${t.label}</div>
-          <div class="v">${t.value}</div>
-          <div class="d">${t.description}</div>
-        </div>
-      `).join("");
-
-      // Render funnel chart
-      if (window.chartRenderer) {
-        window.chartRenderer.renderFunnel("overviewFunnelChart", {
-          impressions: data.impressions.numeric_value,
-          clicks: data.clicks.numeric_value,
-          contacts_registered: data.leads.numeric_value,
-          demos_booked: Math.round(data.leads.numeric_value * 0.6),
-          demos_attended: data.demos_attended.numeric_value,
-          conversions: data.conversions.numeric_value
-        });
-      }
-    } catch (e) {
-      console.error("Error refreshing KPIs:", e);
     }
   }
 
@@ -504,6 +511,9 @@ class CohortApp {
       this.currentTableData = await res.json();
       this.tableState.page = 1;
       this.renderTableContent();
+      if (this.currentTableData && this.currentTableData.totals) {
+        this.renderKPIsFromTotals(this.currentTableData.totals);
+      }
 
       const cacheBadge = document.getElementById("cacheBadge");
       if (cacheBadge) {
