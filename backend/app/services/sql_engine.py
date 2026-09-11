@@ -161,15 +161,28 @@ class SQLEngine:
             }
 
         try:
-            # Handle multi-statement files by taking the primary statement
-            statements = [s.strip() for s in compiled_sql.split(";") if s.strip() and not all(line.strip().startswith("--") or line.strip().startswith("/*") for line in s.strip().splitlines())]
-            exec_sql = statements[0] if statements else compiled_sql
+            # Clean SQL comments and strip trailing semicolons safely
+            clean_sql = re.sub(r"/\*.*?\*/", "", compiled_sql, flags=re.DOTALL)
+            clean_sql = re.sub(r"--.*?$", "", clean_sql, flags=re.MULTILINE).strip()
+            exec_sql = clean_sql.rstrip(";").strip()
 
             with engine.connect() as conn:
-                result = conn.execute(text(exec_sql))
-                columns = list(result.keys())
-                raw_rows = result.fetchall()
-                rows = [dict(zip(columns, row)) for row in raw_rows]
+                dbapi_conn = conn.connection
+                cursor = dbapi_conn.cursor()
+                cursor.execute(exec_sql)
+                if cursor.description:
+                    columns = [col[0] for col in cursor.description]
+                    raw_rows = cursor.fetchall()
+                    rows = []
+                    for row in raw_rows:
+                        if isinstance(row, dict):
+                            rows.append(row)
+                        else:
+                            rows.append(dict(zip(columns, row)))
+                else:
+                    columns = []
+                    rows = []
+                cursor.close()
                 duration_ms = round((time.time() - start_time) * 1000, 2)
 
                 res = {

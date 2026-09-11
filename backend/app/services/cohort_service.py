@@ -277,12 +277,23 @@ class CohortAnalyticsService:
                 c_names = [c for c in (filters.campaign_names or []) if c and c != "__EMPTY__"]
                 c_countries = [c for c in (filters.countries or []) if c and c != "__EMPTY__"]
                 
-                # Execute Production COHORT_MASTER_OPTIMISED Query
-                raw_sql = sql_engine.read_query("01_production/COHORT_MASTER_OPTIMISED.sql")
+                # Slicers requested (defaults to ["date"] if empty)
+                slicers = filters.slicers if (filters.slicers and len(filters.slicers) > 0) else ["date"]
+                valid_slice_dims = {"date", "campaign", "ad", "country"}
+                s1 = slicers[0] if slicers[0] in valid_slice_dims else "date"
+                s2 = slicers[1] if (len(slicers) > 1 and slicers[1] in valid_slice_dims) else "none"
+
+                # Execute Production 20_slice_by_optimised Query (Exact Metabase logic)
+                raw_sql = sql_engine.read_query("01_production/20_slice_by_optimised.sql")
+                if not raw_sql:
+                    raw_sql = sql_engine.read_query("01_production/COHORT_MASTER_OPTIMISED.sql")
+
                 params = {
                     "from_date": from_date,
                     "to_date": to_date,
                     "cohort_days": cohort_days,
+                    "slice_1": s1,
+                    "slice_2": s2,
                     "campaign_nm": c_names if c_names else None,
                     "country_cd": c_countries[0] if (c_countries and len(c_countries) == 1) else None
                 }
@@ -290,9 +301,6 @@ class CohortAnalyticsService:
                 if not res.get("success"):
                     logger.warning(f"Live DB query execution returned unsuccess: {res.get('error')}")
                 if res.get("success") and res.get("rows"):
-                    # Slicers requested (defaults to ["date"] if empty)
-                    slicers = filters.slicers if (filters.slicers and len(filters.slicers) > 0) else ["date"]
-                    
                     dim_labels = {
                         "date": "Lead Capture Date",
                         "campaign": "Campaign Name",
@@ -320,7 +328,7 @@ class CohortAnalyticsService:
                         {"key": "roas", "label": "ROAS"}
                     ])
 
-                    groups: Dict[str, Dict[str, Any]] = {}
+                    rows = []
                     tot_spend = 0.0
                     tot_imp = 0
                     tot_clk = 0
@@ -331,28 +339,40 @@ class CohortAnalyticsService:
                     tot_cv = 0
                     tot_rv = 0.0
 
-                    has_explicit_country_filter = bool(c_countries and len(c_countries) < len(self.raw.get("countries", [])))
-                    has_explicit_campaign_filter = bool(c_names)
-
                     for r in res["rows"]:
-                        row_type = str(r.get("row_type") or "").strip().upper()
-                        if row_type == "TOTAL":
-                            continue
+                        if "slice_1" in r:
+                            v1 = str(r.get("slice_1") or "")
+                            v2 = str(r.get("slice_2") or "")
+                            dim_vals = {slicers[0]: v1}
+                            if s2 != "none" and len(slicers) > 1:
+                                dim_vals[slicers[1]] = v2
+                            for extra_s in slicers[2:]:
+                                dim_vals[extra_s] = "-"
+                        else:
+                            row_type = str(r.get("row_type") or "").strip().upper()
+                            if row_type == "TOTAL":
+                                continue
 
-                        capture_date = str(r.get("lead_capture_period") or r.get("lead_capture_date") or r.get("d1") or "")
-                        campaign = str(r.get("campaign") or r.get("campaign_name") or "")
-                        adset = str(r.get("adset_name") or r.get("adsets_merged") or r.get("adset") or "")
-                        ad = str(r.get("ad") or r.get("ad_name") or "")
-                        country = str(r.get("country") or r.get("country_code") or "")
+                            capture_date = str(r.get("lead_capture_period") or r.get("lead_capture_date") or r.get("d1") or "")
+                            campaign = str(r.get("campaign") or r.get("campaign_name") or "")
+                            adset = str(r.get("adset_name") or r.get("adsets_merged") or r.get("adset") or "")
+                            ad = str(r.get("ad") or r.get("ad_name") or "")
+                            country = str(r.get("country") or r.get("country_code") or "")
 
-                        if has_explicit_campaign_filter and campaign not in c_names:
-                            continue
-                        if filters.adset_names and filters.adset_names != ["__EMPTY__"] and adset not in filters.adset_names:
-                            continue
-                        if filters.ad_names and filters.ad_names != ["__EMPTY__"] and ad not in filters.ad_names:
-                            continue
-                        if has_explicit_country_filter and country and country not in c_countries:
-                            continue
+                            dim_vals = {}
+                            for s in slicers:
+                                if s == "date":
+                                    dim_vals["date"] = capture_date
+                                elif s == "campaign":
+                                    dim_vals["campaign"] = campaign
+                                elif s == "adset":
+                                    dim_vals["adset"] = adset
+                                elif s == "ad":
+                                    dim_vals["ad"] = ad
+                                elif s == "country":
+                                    dim_vals["country"] = country
+                                else:
+                                    dim_vals[s] = str(r.get(s) or "")
 
                         sp = float(r.get("spend") or 0.0)
                         imp = int(r.get("impressions") or 0)
@@ -364,69 +384,6 @@ class CohortAnalyticsService:
                         cv = int(r.get("conversions") or r.get("conversions_first_time") or 0)
                         rv = float(r.get("new_revenue") or r.get("new_revenue_first_time") or 0.0)
 
-                        dim_vals = {}
-                        for s in slicers:
-                            if s == "date":
-                                dim_vals["date"] = capture_date
-                            elif s == "campaign":
-                                dim_vals["campaign"] = campaign
-                            elif s == "adset":
-                                dim_vals["adset"] = adset
-                            elif s == "ad":
-                                dim_vals["ad"] = ad
-                            elif s == "country":
-                                dim_vals["country"] = country
-                            else:
-                                dim_vals[s] = str(r.get(s) or "")
-
-                        group_key = json.dumps(dim_vals, sort_keys=True)
-                        if group_key not in groups:
-                            groups[group_key] = {
-                                "dimensions": dim_vals,
-                                "spend": 0.0,
-                                "impressions": 0,
-                                "clicks": 0,
-                                "contacts_registered": 0,
-                                "demos_booked": 0,
-                                "demos_scheduled": 0,
-                                "demos_attended": 0,
-                                "conversions": 0,
-                                "new_revenue": 0.0
-                            }
-
-                        g = groups[group_key]
-                        g["spend"] += sp
-                        g["impressions"] += imp
-                        g["clicks"] += clk
-                        g["contacts_registered"] += ct
-                        g["demos_booked"] += bk
-                        g["demos_scheduled"] += sc
-                        g["demos_attended"] += at
-                        g["conversions"] += cv
-                        g["new_revenue"] += rv
-
-                        tot_spend += sp
-                        tot_imp += imp
-                        tot_clk += clk
-                        tot_ct += ct
-                        tot_bk += bk
-                        tot_sc += sc
-                        tot_at += at
-                        tot_cv += cv
-                        tot_rv += rv
-
-                    rows = []
-                    for key, g in groups.items():
-                        sp = round(g["spend"], 2)
-                        imp = g["impressions"]
-                        clk = g["clicks"]
-                        ct = g["contacts_registered"]
-                        bk = g["demos_booked"]
-                        sc = g["demos_scheduled"]
-                        at = g["demos_attended"]
-                        cv = g["conversions"]
-                        rv = round(g["new_revenue"], 2)
-
                         cpl = round((sp / ct), 2) if ct > 0 else 0.0
                         ctr = round((clk / imp * 100), 2) if imp > 0 else 0.0
                         att_pct = round((at / ct * 100), 2) if ct > 0 else 0.0
@@ -435,7 +392,7 @@ class CohortAnalyticsService:
                         roas = round((rv / sp), 2) if sp > 0 else 0.0
 
                         rows.append(CohortTableRow(
-                            dimensions=g["dimensions"],
+                            dimensions=dim_vals,
                             spend=sp,
                             impressions=imp,
                             clicks=clk,
@@ -452,6 +409,16 @@ class CohortAnalyticsService:
                             arpu=arpu,
                             roas=roas
                         ))
+
+                        tot_spend += sp
+                        tot_imp += imp
+                        tot_clk += clk
+                        tot_ct += ct
+                        tot_bk += bk
+                        tot_sc += sc
+                        tot_at += at
+                        tot_cv += cv
+                        tot_rv += rv
 
                     totals = CohortTableRow(
                         dimensions={slicers[0]: "TOTAL", "label": "TOTAL"},
