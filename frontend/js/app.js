@@ -48,14 +48,15 @@ class CohortApp {
     try {
       const res = await fetch("/health");
       const data = await res.json();
+      this.isDatabaseLive = !!data.database_connected;
       const badge = document.getElementById("dbStatusBadge");
       if (badge) {
-        if (data.database_connected) {
+        if (this.isDatabaseLive) {
           badge.className = "badge live";
           badge.innerHTML = `<span class="badge-dot"></span> MariaDB Live`;
         } else {
           badge.className = "badge mock";
-          badge.innerHTML = `<span class="badge-dot"></span> Analytical Engine Active`;
+          badge.innerHTML = `<span class="badge-dot"></span> Analytical Engine (DB Disconnected)`;
         }
       }
     } catch (e) {
@@ -506,14 +507,18 @@ class CohortApp {
 
       const cacheBadge = document.getElementById("cacheBadge");
       if (cacheBadge) {
-        if (durationMs < 40 && !this.state.force_refresh) {
+        if (!this.isDatabaseLive) {
+          cacheBadge.style.background = "rgba(245,158,11,0.15)";
+          cacheBadge.style.color = "var(--warn)";
+          cacheBadge.innerText = `🟡 Analytical Simulator (${durationMs}ms)`;
+        } else if (durationMs < 50 && !this.state.force_refresh) {
           cacheBadge.style.background = "rgba(99,102,241,0.12)";
           cacheBadge.style.color = "var(--brand)";
           cacheBadge.innerText = `⚡ Cached (${durationMs}ms)`;
         } else {
           cacheBadge.style.background = "rgba(16,185,129,0.12)";
           cacheBadge.style.color = "var(--teal)";
-          cacheBadge.innerText = `🟢 Live DB (${durationMs}ms)`;
+          cacheBadge.innerText = `🟢 Live MariaDB (${durationMs}ms)`;
         }
       }
     } catch (e) {

@@ -55,5 +55,37 @@ def check_db_connection() -> bool:
             conn.execute(text("SELECT 1"))
             return True
     except Exception as e:
-        logger.info(f"MariaDB connection check failed: {e}. Fallback to analytical engine.")
+        logger.warning(f"MariaDB connection check failed: {e}. Fallback to analytical engine.")
         return False
+
+def get_db_status() -> dict:
+    """Detailed DB connection status and diagnostics"""
+    if not engine:
+        return {
+            "connected": False,
+            "error": "SQLAlchemy engine not initialized (check database configuration / .env)",
+            "host": settings.MARIADB_HOST,
+            "port": settings.MARIADB_PORT,
+            "user": settings.MARIADB_USER,
+            "database": settings.MARIADB_DATABASE
+        }
+    try:
+        with engine.connect() as conn:
+            res = conn.execute(text("SELECT NOW() as db_time, @@hostname as db_host")).fetchone()
+            return {
+                "connected": True,
+                "host": settings.MARIADB_HOST,
+                "port": settings.MARIADB_PORT,
+                "user": settings.MARIADB_USER,
+                "database": settings.MARIADB_DATABASE,
+                "db_server_time": str(res[0]) if res else None
+            }
+    except Exception as e:
+        return {
+            "connected": False,
+            "error": str(e),
+            "host": settings.MARIADB_HOST,
+            "port": settings.MARIADB_PORT,
+            "user": settings.MARIADB_USER,
+            "database": settings.MARIADB_DATABASE
+        }

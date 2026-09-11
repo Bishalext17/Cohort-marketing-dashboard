@@ -41,14 +41,18 @@ app.add_middleware(
 # API Routers
 app.include_router(api_v1_router, prefix=settings.API_V1_STR)
 
+from backend.app.core.database import check_db_connection, get_db_status
+
 @app.get("/health")
 def health_check():
-    db_ok = check_db_connection()
+    db_stat = get_db_status()
+    db_ok = db_stat.get("connected", False)
     return {
         "status": "healthy",
         "version": settings.VERSION,
         "database_connected": db_ok,
-        "engine_mode": "live_mariadb" if db_ok else "fallback_analytical_service"
+        "engine_mode": "live_mariadb" if db_ok else "fallback_analytical_service",
+        "database_status": db_stat
     }
 
 # Frontend Static Files
