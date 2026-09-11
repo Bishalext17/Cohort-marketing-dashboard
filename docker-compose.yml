@@ -13,6 +13,7 @@ services:
       - ./backend/.env
     volumes:
       - ./backend/.env:/app/backend/.env:ro
+      - ./logs:/app/logs
     environment:
       - PORT=8000
 

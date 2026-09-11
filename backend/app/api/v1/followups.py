@@ -1,6 +1,7 @@
-from fastapi import APIRouter, Query, Response, HTTPException
+from fastapi import APIRouter, Query, Response, HTTPException, Request
 from backend.app.models.schemas import FollowUpListResponse, FollowUpContact, UpdateLeadStatusRequest
 from backend.app.services.cohort_service import cohort_service
+from backend.app.core.audit_logger import audit_logger, AuditCategory, AuditLevel
 import csv
 import io
 
@@ -12,7 +13,7 @@ def get_followup_contacts(category: str = Query("all", description="Category: al
     return cohort_service.get_followup_contacts(category)
 
 @router.patch("/{lead_id}", response_model=FollowUpContact)
-def update_lead_status(lead_id: str, req: UpdateLeadStatusRequest):
+def update_lead_status(lead_id: str, req: UpdateLeadStatusRequest, request: Request = None):
     """Update CRM status, follow-up priority, and notes for a specific lead."""
     updated = cohort_service.update_lead_status(
         lead_id=lead_id,
@@ -22,6 +23,21 @@ def update_lead_status(lead_id: str, req: UpdateLeadStatusRequest):
     )
     if not updated:
         raise HTTPException(status_code=404, detail="Lead ID not found.")
+    
+    client_ip = request.client.host if (request and request.client) else "internal"
+    audit_logger.log_event(
+        category=AuditCategory.LEAD_MUTATION,
+        action="LEAD_STATUS_UPDATE",
+        level=AuditLevel.INFO,
+        ip_address=client_ip,
+        details={
+            "lead_id": lead_id,
+            "new_status": req.status,
+            "new_priority": req.followup_priority,
+            "notes": req.notes,
+            "parent_name": updated.parent_name
+        }
+    )
     return updated
 
 @router.get("/export-csv")

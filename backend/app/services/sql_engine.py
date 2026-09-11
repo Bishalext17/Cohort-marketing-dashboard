@@ -7,6 +7,7 @@ from backend.app.core.database import engine, check_db_connection
 from backend.app.core.config import settings
 from backend.app.models.schemas import FilterParams
 from backend.app.services.cache_manager import cache_manager
+from backend.app.core.audit_logger import audit_logger, AuditCategory, AuditLevel
 import logging
 
 logger = logging.getLogger(__name__)
@@ -126,6 +127,12 @@ class SQLEngine:
         write_keywords = r"\b(INSERT|UPDATE|DELETE|DROP|ALTER|TRUNCATE|REPLACE|CREATE|GRANT|REVOKE|LOCK)\b"
         if re.search(write_keywords, compiled_sql, re.IGNORECASE):
             logger.warning("Attempted write/mutation query blocked in read-only production mode.")
+            audit_logger.log_event(
+                category=AuditCategory.SYSTEM_ERROR,
+                action="BLOCKED_WRITE_QUERY",
+                level=AuditLevel.WARNING,
+                details={"error": "Write query blocked", "params": params, "sql_preview": compiled_sql[:200]}
+            )
             return {
                 "success": False,
                 "executed": False,
@@ -146,9 +153,24 @@ class SQLEngine:
                 res = dict(cached_res)
                 res["duration_ms"] = round((time.time() - start_time) * 1000, 2)
                 res["cached"] = True
+                audit_logger.log_event(
+                    category=AuditCategory.QUERY_EXECUTION,
+                    action="SQL_CACHE_HIT",
+                    level=AuditLevel.INFO,
+                    duration_ms=res["duration_ms"],
+                    details={"params": params, "row_count": res.get("row_count", 0), "cached": True}
+                )
                 return res
 
         if not check_db_connection() or not engine:
+            duration_ms = round((time.time() - start_time) * 1000, 2)
+            audit_logger.log_event(
+                category=AuditCategory.SYSTEM_ERROR,
+                action="DB_DISCONNECTED_FALLBACK",
+                level=AuditLevel.WARNING,
+                duration_ms=duration_ms,
+                details={"params": params, "msg": "Running fallback analytical engine"}
+            )
             return {
                 "success": False,
                 "executed": False,
@@ -157,7 +179,7 @@ class SQLEngine:
                 "columns": [],
                 "rows": [],
                 "row_count": 0,
-                "duration_ms": round((time.time() - start_time) * 1000, 2)
+                "duration_ms": duration_ms
             }
 
         try:
@@ -199,9 +221,32 @@ class SQLEngine:
                 if settings.CACHE_ENABLED:
                     cache_manager.set(cache_key, res)
                     
+                audit_logger.log_event(
+                    category=AuditCategory.QUERY_EXECUTION,
+                    action="SQL_LIVE_EXECUTE",
+                    level=AuditLevel.INFO,
+                    duration_ms=duration_ms,
+                    details={
+                        "params": params,
+                        "row_count": len(rows),
+                        "cached": False
+                    }
+                )
                 return res
         except Exception as e:
+            duration_ms = round((time.time() - start_time) * 1000, 2)
             logger.error(f"SQL Execution error: {e}")
+            audit_logger.log_event(
+                category=AuditCategory.SYSTEM_ERROR,
+                action="SQL_EXECUTION_ERROR",
+                level=AuditLevel.ERROR,
+                duration_ms=duration_ms,
+                details={
+                    "error": str(e),
+                    "params": params,
+                    "sql_preview": compiled_sql[:200]
+                }
+            )
             return {
                 "success": False,
                 "executed": True,
@@ -210,7 +255,7 @@ class SQLEngine:
                 "columns": [],
                 "rows": [],
                 "row_count": 0,
-                "duration_ms": round((time.time() - start_time) * 1000, 2)
+                "duration_ms": duration_ms
             }
 
 
