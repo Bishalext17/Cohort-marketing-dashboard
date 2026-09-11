@@ -380,12 +380,32 @@ class CohortApp {
     }
   }
 
+  getEffectivePayload() {
+    const payload = { ...this.state };
+    
+    // Check dropdowns: if "All" are selected (length matches metadata options or empty), set to [] so backend doesn't filter out unlisted countries/channels
+    const checkAll = (key, metaKey) => {
+      const opts = this.metadata ? this.metadata[metaKey] : [];
+      const sel = payload[key] || [];
+      if (!opts || sel.length === 0 || (Array.isArray(opts) && sel.length >= opts.length)) {
+        payload[key] = [];
+      }
+    };
+    
+    checkAll("channels", "channels");
+    checkAll("platforms", "platforms");
+    checkAll("countries", "countries");
+    checkAll("courses", "courses");
+    
+    return payload;
+  }
+
   async refreshMaturity() {
     try {
       const res = await (window.authFetch || fetch)("/api/v1/cohorts/maturity", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(this.state)
+        body: JSON.stringify(this.getEffectivePayload())
       });
       const data = await res.json();
       
@@ -432,7 +452,7 @@ class CohortApp {
       const res = await (window.authFetch || fetch)("/api/v1/kpis", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(this.state)
+        body: JSON.stringify(this.getEffectivePayload())
       });
       const data = await res.json();
       
@@ -475,7 +495,7 @@ class CohortApp {
       const res = await (window.authFetch || fetch)("/api/v1/cohorts/master", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(this.state)
+        body: JSON.stringify(this.getEffectivePayload())
       });
       const t1 = performance.now();
       const durationMs = Math.round(t1 - t0);

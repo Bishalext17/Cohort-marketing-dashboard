@@ -187,16 +187,31 @@ class CohortAnalyticsService:
         daily_conv: Dict[str, int] = {}
         daily_rev: Dict[str, float] = {}
 
-        for ld in self.lead_records:
-            if ld["combo_idx"] not in valid_combos:
-                continue
-            d_str = (base_start + timedelta(days=ld["day"])).strftime("%Y-%m-%d")
-            daily_leads[d_str] = daily_leads.get(d_str, 0) + 1
-            if ld["att_d"] >= 0:
-                daily_att[d_str] = daily_att.get(d_str, 0) + 1
-            if ld["conv_d"] >= 0:
-                daily_conv[d_str] = daily_conv.get(d_str, 0) + 1
-                daily_rev[d_str] = daily_rev.get(d_str, 0.0) + ld["revenue"]
+        if check_db_connection():
+            try:
+                db_res = sql_engine.execute_query(
+                    "SELECT DATE(created_at) as capture_date, COUNT(DISTINCT id) as leads_cnt FROM leads_contact_event_logs WHERE deleted_at IS NULL AND event_type = 'contact_submitted' AND created_at >= {{from_date}} AND created_at < DATE_ADD({{to_date}}, INTERVAL 1 DAY) GROUP BY 1;",
+                    {"from_date": start_str, "to_date": end_str}
+                )
+                if db_res.get("success") and db_res.get("rows"):
+                    for r in db_res["rows"]:
+                        c_dt = str(r.get("capture_date") or "")
+                        if c_dt:
+                            daily_leads[c_dt] = int(r.get("leads_cnt") or 0)
+            except Exception as e:
+                logger.warning(f"Failed to fetch live maturity stats: {e}")
+
+        if not daily_leads:
+            for ld in self.lead_records:
+                if ld["combo_idx"] not in valid_combos:
+                    continue
+                d_str = (base_start + timedelta(days=ld["day"])).strftime("%Y-%m-%d")
+                daily_leads[d_str] = daily_leads.get(d_str, 0) + 1
+                if ld["att_d"] >= 0:
+                    daily_att[d_str] = daily_att.get(d_str, 0) + 1
+                if ld["conv_d"] >= 0:
+                    daily_conv[d_str] = daily_conv.get(d_str, 0) + 1
+                    daily_rev[d_str] = daily_rev.get(d_str, 0.0) + ld["revenue"]
 
         for d in range(days):
             curr_date_dt = start_date + timedelta(days=d)
@@ -258,14 +273,18 @@ class CohortAnalyticsService:
                 offset = self._parse_cohort_offset(filters.cohort_period)
                 cohort_days = 9999 if offset is None else offset
                 
+                # Filter criteria sanitation
+                c_names = [c for c in (filters.campaign_names or []) if c and c != "__EMPTY__"]
+                c_countries = [c for c in (filters.countries or []) if c and c != "__EMPTY__"]
+                
                 # Execute Production COHORT_MASTER_OPTIMISED Query
                 raw_sql = sql_engine.read_query("01_production/COHORT_MASTER_OPTIMISED.sql")
                 params = {
                     "from_date": from_date,
                     "to_date": to_date,
                     "cohort_days": cohort_days,
-                    "campaign_nm": filters.campaign_names if filters.campaign_names else None,
-                    "country_cd": filters.countries[0] if (filters.countries and len(filters.countries) == 1) else None
+                    "campaign_nm": c_names if c_names else None,
+                    "country_cd": c_countries[0] if (c_countries and len(c_countries) == 1) else None
                 }
                 res = sql_engine.execute_query(raw_sql, params)
                 if res.get("success") and res.get("rows"):
@@ -310,24 +329,27 @@ class CohortAnalyticsService:
                     tot_cv = 0
                     tot_rv = 0.0
 
+                    has_explicit_country_filter = bool(c_countries and len(c_countries) < len(self.raw.get("countries", [])))
+                    has_explicit_campaign_filter = bool(c_names)
+
                     for r in res["rows"]:
                         row_type = str(r.get("row_type") or "").strip().upper()
                         if row_type == "TOTAL":
                             continue
 
-                        capture_date = str(r.get("lead_capture_date") or r.get("d1") or r.get("lead_capture_period") or "")
-                        campaign = str(r.get("campaign_name") or r.get("campaign") or "")
+                        capture_date = str(r.get("lead_capture_period") or r.get("lead_capture_date") or r.get("d1") or "")
+                        campaign = str(r.get("campaign") or r.get("campaign_name") or "")
                         adset = str(r.get("adset_name") or r.get("adsets_merged") or r.get("adset") or "")
-                        ad = str(r.get("ad_name") or r.get("ad") or "")
-                        country = str(r.get("country_code") or r.get("country") or "")
+                        ad = str(r.get("ad") or r.get("ad_name") or "")
+                        country = str(r.get("country") or r.get("country_code") or "")
 
-                        if filters.campaign_names and campaign not in filters.campaign_names:
+                        if has_explicit_campaign_filter and campaign not in c_names:
                             continue
-                        if filters.adset_names and adset not in filters.adset_names:
+                        if filters.adset_names and filters.adset_names != ["__EMPTY__"] and adset not in filters.adset_names:
                             continue
-                        if filters.ad_names and ad not in filters.ad_names:
+                        if filters.ad_names and filters.ad_names != ["__EMPTY__"] and ad not in filters.ad_names:
                             continue
-                        if filters.countries and country not in filters.countries:
+                        if has_explicit_country_filter and country and country not in c_countries:
                             continue
 
                         sp = float(r.get("spend") or 0.0)
