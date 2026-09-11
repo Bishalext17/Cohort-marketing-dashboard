@@ -114,7 +114,7 @@ class SQLEngine:
         """Basic SQL string escaping to prevent syntax breakage."""
         return s.replace("'", "''").replace("\\", "\\\\")
 
-    def execute_query(self, sql_template: str, params: Dict[str, Any]) -> Dict[str, Any]:
+    def execute_query(self, sql_template: str, params: Dict[str, Any], force_refresh: bool = False) -> Dict[str, Any]:
         """
         Compiles and executes SQL query against MariaDB.
         Returns rows, column names, execution duration in ms, and compiled SQL.
@@ -139,7 +139,7 @@ class SQLEngine:
 
         # Check In-Memory Query Cache First
         cache_key = f"sql:{compiled_sql}"
-        if settings.CACHE_ENABLED:
+        if settings.CACHE_ENABLED and not force_refresh:
             cached_res = cache_manager.get(cache_key)
             if cached_res:
                 logger.info("Serving SQL query results directly from cache_manager (0 DB load).")

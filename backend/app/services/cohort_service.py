@@ -286,7 +286,9 @@ class CohortAnalyticsService:
                     "campaign_nm": c_names if c_names else None,
                     "country_cd": c_countries[0] if (c_countries and len(c_countries) == 1) else None
                 }
-                res = sql_engine.execute_query(raw_sql, params)
+                res = sql_engine.execute_query(raw_sql, params, force_refresh=bool(filters.force_refresh))
+                if not res.get("success"):
+                    logger.warning(f"Live DB query execution returned unsuccess: {res.get('error')}")
                 if res.get("success") and res.get("rows"):
                     # Slicers requested (defaults to ["date"] if empty)
                     slicers = filters.slicers if (filters.slicers and len(filters.slicers) > 0) else ["date"]
