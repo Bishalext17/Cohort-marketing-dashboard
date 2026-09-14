@@ -10,7 +10,7 @@
 # On Cloud Run, the DB is reached through the unix socket mounted by
 # --set-cloudsql-instances, not over TCP.
 DB_SOCKET: "/cloudsql/bambinos-411405:asia-south1:production"
-DB_USER: "admin"
+DB_USER: "root"
 DB_NAME: "production"
 DB_READ_ONLY: "false"
 

@@ -90,7 +90,7 @@ args_arr=(
   "--task-timeout" "$TIMEOUT"
   "--cpu" "1"
   "--memory" "2Gi"
-  "--set-env-vars" "DB_SOCKET=/cloudsql/${CLOUD_SQL_INSTANCE},DB_USER=admin,DB_NAME=production,DB_READ_ONLY=false,TZ=Asia/Kolkata,META_API_VERSION=v20.0"
+  "--set-env-vars" "DB_SOCKET=/cloudsql/${CLOUD_SQL_INSTANCE},DB_USER=root,DB_NAME=production,DB_READ_ONLY=false,TZ=Asia/Kolkata,META_API_VERSION=v20.0"
 )
 
 if [[ -f "$ENV_FILE" ]]; then

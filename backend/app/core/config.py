@@ -39,8 +39,11 @@ class Settings(BaseSettings):
     # Database URL Constructor with safe URL encoding
     @property
     def SQLALCHEMY_DATABASE_URI(self) -> str:
-        escaped_user = urllib.parse.quote_plus(self.MARIADB_USER)
-        escaped_pass = urllib.parse.quote_plus(self.MARIADB_PASSWORD)
+        from sqlalchemy.engine.url import URL
+        
+        raw_user = (self.MARIADB_USER or "root").strip()
+        raw_pass = (self.MARIADB_PASSWORD or "").strip()
+        raw_db = (self.MARIADB_DATABASE or "production").strip()
         
         socket_path = self.DB_SOCKET
         if not socket_path:
@@ -57,8 +60,23 @@ class Settings(BaseSettings):
                     pass
 
         if socket_path:
-            return f"mysql+pymysql://{escaped_user}:{escaped_pass}@/{self.MARIADB_DATABASE}?unix_socket={socket_path}&charset=utf8mb4"
-        return f"mysql+pymysql://{escaped_user}:{escaped_pass}@{self.MARIADB_HOST}:{self.MARIADB_PORT}/{self.MARIADB_DATABASE}?charset=utf8mb4"
+            return str(URL.create(
+                drivername="mysql+pymysql",
+                username=raw_user,
+                password=raw_pass,
+                database=raw_db,
+                query={"unix_socket": socket_path.strip(), "charset": "utf8mb4"}
+            ))
+            
+        return str(URL.create(
+            drivername="mysql+pymysql",
+            username=raw_user,
+            password=raw_pass,
+            host=self.MARIADB_HOST,
+            port=self.MARIADB_PORT,
+            database=raw_db,
+            query={"charset": "utf8mb4"}
+        ))
     
     # Feature flags & Caching
     MOCK_DATA_FALLBACK: bool = True
