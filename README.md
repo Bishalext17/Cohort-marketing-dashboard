@@ -74,6 +74,8 @@ uvicorn backend.app.main:app --reload --port 8000
 
 ## Documentation Index
 
+- [📄 `Bambinos_Marketing_Intelligence_Executive_Report.pdf`](file:///c:/Users/bisha/OneDrive/Documents/GitHub/Cohort-marketing-dashboard/docs/Bambinos_Marketing_Intelligence_Executive_Report.pdf): **Executive Briefing PDF for Senior Leadership** (Platform Architecture, Windsor.ai Cost Controls, Token Optimization & Data Breach Safeguards).
+- [`MASTER_ROADMAP_AND_ARCHITECTURE.md`](file:///c:/Users/bisha/OneDrive/Documents/GitHub/Cohort-marketing-dashboard/docs/MASTER_ROADMAP_AND_ARCHITECTURE.md): Full system architecture, dual-truth contract, gap analysis & execution checklist.
 - [`FORMULA_CARD_FOR_DASHBOARD.md`](file:///c:/Users/bisha/OneDrive/Documents/GitHub/Cohort-marketing-dashboard/docs/FORMULA_CARD_FOR_DASHBOARD.md): Metabase-ready formula markdown.
 - [`OPTIMISATION_PLAN.md`](file:///c:/Users/bisha/OneDrive/Documents/GitHub/Cohort-marketing-dashboard/docs/OPTIMISATION_PLAN.md): 5-phase DB performance & caching plan.
 - [`NEXT_STEPS.md`](file:///c:/Users/bisha/OneDrive/Documents/GitHub/Cohort-marketing-dashboard/docs/NEXT_STEPS.md): Outstanding engineering & CRO items.
