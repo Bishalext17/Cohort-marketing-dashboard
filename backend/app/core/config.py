@@ -59,16 +59,18 @@ class Settings(BaseSettings):
                 except Exception:
                     pass
 
+        # NOTE: str(URL) masks the password as "***" in SQLAlchemy 2.x, so the
+        # URL must be rendered explicitly with hide_password=False.
         if socket_path:
-            return str(URL.create(
+            return URL.create(
                 drivername="mysql+pymysql",
                 username=raw_user,
                 password=raw_pass,
                 database=raw_db,
                 query={"unix_socket": socket_path.strip(), "charset": "utf8mb4"}
-            ))
+            ).render_as_string(hide_password=False)
             
-        return str(URL.create(
+        return URL.create(
             drivername="mysql+pymysql",
             username=raw_user,
             password=raw_pass,
@@ -76,7 +78,7 @@ class Settings(BaseSettings):
             port=self.MARIADB_PORT,
             database=raw_db,
             query={"charset": "utf8mb4"}
-        ))
+        ).render_as_string(hide_password=False)
     
     # Feature flags & Caching
     MOCK_DATA_FALLBACK: bool = True

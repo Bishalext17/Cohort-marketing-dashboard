@@ -82,7 +82,7 @@ args_arr=(
   "--region" "$REGION"
   "--project" "$PROJECT"
   "--set-cloudsql-instances" "$CLOUD_SQL_INSTANCE"
-  "--set-secrets" "DB_PASS=cron-transcript-db-pass:latest,META_ACCESS_TOKEN=metaAccessToken:latest"
+  "--set-secrets" "DB_PASS=marketing-db-pass:latest,META_ACCESS_TOKEN=metaAccessToken:latest"
   "--network" "$NETWORK"
   "--subnet" "$SUBNET"
   "--vpc-egress" "$VPC_EGRESS"
@@ -90,7 +90,7 @@ args_arr=(
   "--task-timeout" "$TIMEOUT"
   "--cpu" "1"
   "--memory" "2Gi"
-  "--set-env-vars" "DB_SOCKET=/cloudsql/${CLOUD_SQL_INSTANCE},DB_USER=root,DB_NAME=production,DB_READ_ONLY=false,TZ=Asia/Kolkata,META_API_VERSION=v20.0"
+  "--set-env-vars" "DB_SOCKET=/cloudsql/${CLOUD_SQL_INSTANCE},DB_USER=admin,DB_NAME=production,DB_READ_ONLY=false,TZ=Asia/Kolkata,META_API_VERSION=v20.0"
 )
 
 run gcloud "${args_arr[@]}"

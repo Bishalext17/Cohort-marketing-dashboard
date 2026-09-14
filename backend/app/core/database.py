@@ -7,14 +7,51 @@ logger = logging.getLogger(__name__)
 
 Base = declarative_base()
 
+import os
+import pymysql
+
+def _get_raw_connection():
+    raw_user = (settings.MARIADB_USER or "root").strip()
+    raw_pass = (settings.MARIADB_PASSWORD or "").strip()
+    raw_db = (settings.MARIADB_DATABASE or "production").strip()
+    
+    socket_path = settings.DB_SOCKET
+    if not socket_path:
+        default_cloudsql_socket = f"/cloudsql/{os.getenv('CLOUD_SQL_INSTANCE', 'bambinos-411405:asia-south1:production')}"
+        if os.path.exists(default_cloudsql_socket):
+            socket_path = default_cloudsql_socket
+        elif os.path.exists("/cloudsql"):
+            try:
+                entries = [os.path.join("/cloudsql", e) for e in os.listdir("/cloudsql") if not e.startswith(".")]
+                if entries:
+                    socket_path = entries[0]
+            except Exception:
+                pass
+
+    kwargs = {
+        "user": raw_user,
+        "password": raw_pass,
+        "database": raw_db,
+        "charset": "utf8mb4",
+        "connect_timeout": 15,
+        "read_timeout": 120,
+    }
+    if socket_path and socket_path.lower() not in ["none", "false", "disabled", "tcp"]:
+        kwargs["unix_socket"] = socket_path.strip()
+    else:
+        kwargs["host"] = settings.MARIADB_HOST
+        kwargs["port"] = settings.MARIADB_PORT
+
+    return pymysql.connect(**kwargs)
+
 try:
     engine = create_engine(
-        settings.SQLALCHEMY_DATABASE_URI,
+        "mysql+pymysql://",
+        creator=_get_raw_connection,
         pool_pre_ping=True,
         pool_recycle=3600,
         pool_size=10,
         max_overflow=20,
-        connect_args={"connect_timeout": 5},
         execution_options={"read_only": settings.DB_READ_ONLY}
     )
     
