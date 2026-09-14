@@ -93,12 +93,6 @@ args_arr=(
   "--set-env-vars" "DB_SOCKET=/cloudsql/${CLOUD_SQL_INSTANCE},DB_USER=root,DB_NAME=production,DB_READ_ONLY=false,TZ=Asia/Kolkata,META_API_VERSION=v20.0"
 )
 
-if [[ -f "$ENV_FILE" ]]; then
-  args_arr+=("--env-vars-file" "$ENV_FILE")
-elif [[ -f "$(dirname "$0")/cron-marketing-env.yaml.example" ]]; then
-  args_arr+=("--env-vars-file" "$(dirname "$0")/cron-marketing-env.yaml.example")
-fi
-
 run gcloud "${args_arr[@]}"
 
 # ─── 4. CLOUD SCHEDULER TRIGGER (08:00 AM IST) ───────────────────────────────
