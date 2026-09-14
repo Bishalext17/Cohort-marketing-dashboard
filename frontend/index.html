@@ -1,716 +1,907 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Bambinos Growth — Marketing & Cohort Intelligence</title>
-  <link rel="stylesheet" href="/static/css/styles.css">
-  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+<!DOCTYPE html><html class="h-full bg-slate-50 antialiased" lang="en"><head>
+<meta charset="utf-8">
+<meta content="width=device-width, initial-scale=1.0" name="viewport">
+<title>Bambinos Growth · Marketing Intelligence</title>
+<!-- Inter & Plus Jakarta Sans Google Fonts -->
+<link href="https://fonts.googleapis.com" rel="preconnect">
+<link crossorigin="" href="https://fonts.gstatic.com" rel="preconnect">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&amp;family=JetBrains+Mono:wght@400;500;600&amp;display=swap" rel="stylesheet">
+<!-- Tailwind CSS v3 with Plugins -->
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<script>
+    tailwind.config = {
+      darkMode: 'class',
+      theme: {
+        extend: {
+          fontFamily: {
+            sans: ['Inter', 'system-ui', 'sans-serif'],
+            mono: ['JetBrains Mono', 'monospace'],
+          },
+          colors: {
+            brand: {
+              50: '#f0f7ff',
+              100: '#e0effe',
+              500: '#0284c7',
+              600: '#0369a1',
+              700: '#075985',
+              800: '#0c4a6e',
+            },
+            metric: {
+              roas: '#0284c7',
+              spend: '#94a3b8',
+              revenue: '#2563eb',
+            }
+          },
+          boxShadow: {
+            subtle: '0 1px 3px 0 rgba(15, 23, 42, 0.05), 0 1px 2px -1px rgba(15, 23, 42, 0.05)',
+            card: '0 4px 6px -1px rgba(15, 23, 42, 0.04), 0 2px 4px -2px rgba(15, 23, 42, 0.04)',
+            elevation: '0 10px 15px -3px rgba(15, 23, 42, 0.05), 0 4px 6px -4px rgba(15, 23, 42, 0.03)',
+          }
+        }
+      }
+    }
+  </script>
+<style data-purpose="custom-scrollbar">
+    /* Custom horizontal & vertical scrollbar styling */
+    ::-webkit-scrollbar {
+      width: 6px;
+      height: 6px;
+    }
+    ::-webkit-scrollbar-track {
+      background: #f1f5f9;
+      border-radius: 4px;
+    }
+    ::-webkit-scrollbar-thumb {
+      background: #cbd5e1;
+      border-radius: 4px;
+    }
+    ::-webkit-scrollbar-thumb:hover {
+      background: #94a3b8;
+    }
+  </style>
+<style data-purpose="chart-enhancements">
+    /* Grid background & interactive chart visuals */
+    .chart-grid-line {
+      stroke: #e2e8f0;
+      stroke-dasharray: 4 4;
+    }
+    .metric-card-hover {
+      transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+    }
+    .metric-card-hover:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 12px 24px -8px rgba(15, 23, 42, 0.08);
+    }
+  </style>
 </head>
-<body>
-<div class="wrap">
-
-  <!-- ==================== MASTHEAD ==================== -->
-  <header class="mast">
-    <div class="mast-title">
-      <div class="mast-icon">📈</div>
-      <div>
-        <h1>Bambinos Growth · Marketing Intelligence</h1>
-        <div class="sub">Dual-Source Truth Engine · Direct Meta Marketing API (v20) × Bambinos Metabase Internal Outcomes · IST</div>
-      </div>
-    </div>
-    <div class="header-actions">
-      <div id="dbStatusBadge" class="badge mock">
-        <span class="badge-dot"></span> Analytical Engine Active
-      </div>
-      <div class="stamp">Data Snapshot: <b id="lastUpd">Live Sync Active</b></div>
-      <div id="headerUserBadge" class="user-profile-badge" style="display:none;">
-        <span class="user-avatar">👨‍💼</span>
-        <div class="user-info">
-          <span id="headerUserName" class="user-name">Growth Lead</span>
-          <span id="headerUserRole" class="user-role">Admin</span>
-        </div>
-        <button id="btnLogout" class="btn-logout" title="Sign Out">
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path><polyline points="16 17 21 12 16 7"></polyline><line x1="21" y1="12" x2="9" y2="12"></line></svg>
-          <span>Logout</span>
-        </button>
-      </div>
-    </div>
-  </header>
-
-  <!-- ==================== 5 CANONICAL NAVIGATION TABS ==================== -->
-  <nav class="nav-tabs">
-    <button class="nav-tab active" data-view="viewCompany">🏛️ Company level ROAS</button>
-    <button class="nav-tab" data-view="viewCohort">📊 Cohort performance explorer</button>
-    <button class="nav-tab" data-view="viewProgression">🔥 Cohort ROAS progression</button>
-    <button class="nav-tab" data-view="viewOperations">⚙️ Campaign Meta diagnosis</button>
-    <button class="nav-tab" data-view="viewMeta">🎯 Meta Ads Manager data</button>
-  </nav>
-
-  <!-- ==================== TAB 1: COMPANY LEVEL ROAS ==================== -->
-  <main id="viewCompany" class="view-section active">
-    <div class="panel">
-      <div class="panel-hd">
-        <div>
-          <span class="eyebrow">COMPANY PERFORMANCE</span>
-          <h2 style="margin:0;font-size:18px;font-weight:700;">Company level ROAS</h2>
-          <p style="margin:2px 0 0;font-size:12px;color:var(--ink3);">Revenue by invoice date · Meta spend before GST · INR</p>
-        </div>
-        <div style="display:flex;gap:12px;align-items:center;flex-wrap:wrap;">
-          <div class="date-input-wrap">
-            <span class="k">From</span>
-            <input type="date" id="companyDateFrom" class="date-input">
-          </div>
-          <span class="sep" style="color:var(--ink3);">→</span>
-          <div class="date-input-wrap">
-            <span class="k">To</span>
-            <input type="date" id="companyDateTo" class="date-input">
-          </div>
-        </div>
-      </div>
-      <div class="panel-bd">
-        <!-- Filter Bar -->
-        <div class="ctrl-row" style="margin-bottom:14px;flex-wrap:wrap;gap:12px;">
-          <label style="display:inline-flex;align-items:center;gap:6px;font-size:12px;font-weight:600;color:var(--ink2);">
-            Target Market
-            <select id="companyMarketFilter" class="date-input" style="padding:6px 10px;">
-              <option value="">All target markets</option>
-            </select>
-          </label>
-          <label style="display:inline-flex;align-items:center;gap:6px;font-size:12px;font-weight:600;color:var(--ink2);">
-            Course
-            <select id="companyCourseFilter" class="date-input" style="padding:6px 10px;">
-              <option value="">All courses</option>
-            </select>
-          </label>
-          <label style="display:inline-flex;align-items:center;gap:6px;font-size:12px;font-weight:600;color:var(--ink2);">
-            Slice by
-            <select id="companySliceFilter" class="date-input" style="padding:6px 10px;">
-              <option value="date">Date</option>
-              <option value="whole">Whole selected period</option>
-            </select>
-          </label>
-        </div>
-
-        <!-- Month Presets -->
-        <div class="month-presets" id="companyMonthPresets"></div>
-
-        <!-- KPI Grid -->
-        <div class="kpi-grid" id="companyKpiGrid" style="grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); margin-bottom: 20px;">
-          <article class="kpi-card">
-            <div class="kpi-title">Marketing Spend</div>
-            <div class="kpi-val" id="kpiCompanySpend">₹0</div>
-            <div class="kpi-desc">Meta · selected target market and course</div>
-          </article>
-          <article class="kpi-card">
-            <div class="kpi-title">New Revenue</div>
-            <div class="kpi-val" id="kpiCompanyNewRev" style="color:var(--petrol-dark);">₹0</div>
-            <div class="kpi-desc">Regular invoices · selected dates</div>
-          </article>
-          <article class="kpi-card highlight">
-            <div class="kpi-title">New ROAS</div>
-            <div class="kpi-val" id="kpiCompanyRoas" style="color:var(--teal-dark);">0.00×</div>
-            <div class="kpi-desc">Total new revenue ÷ total spend</div>
-          </article>
-          <article class="kpi-card">
-            <div class="kpi-title">Renewal Revenue</div>
-            <div class="kpi-val" id="kpiCompanyRenewalRev">₹0</div>
-            <div class="kpi-desc">Repeat and renewal invoices</div>
-          </article>
-          <article class="kpi-card">
-            <div class="kpi-title">Cost per Demo Booked</div>
-            <div class="kpi-val" id="kpiCompanyCostPerDemo">₹0</div>
-            <div class="kpi-desc">Spend ÷ internal demos booked</div>
-          </article>
-          <article class="kpi-card">
-            <div class="kpi-title">Revenue per Demo Booked</div>
-            <div class="kpi-val" id="kpiCompanyRevPerDemo">₹0</div>
-            <div class="kpi-desc">New revenue ÷ internal demos booked</div>
-          </article>
-        </div>
-
-        <!-- Financial Chart -->
-        <div class="chart-box" style="margin-bottom:20px;height:320px;">
-          <h3 id="companyChartTitle">Daily Revenue, Spend & ROAS</h3>
-          <p id="companyChartSub" style="font-size:12px;color:var(--ink3);margin:0 0 12px;">Financial returns by invoice date</p>
-          <div style="position:relative;height:240px;width:100%;">
-            <canvas id="companyFinancialChart"></canvas>
-          </div>
-        </div>
-
-        <!-- Calendar Table -->
-        <div class="tbl-wrap">
-          <table class="desk-table" id="companyTable">
-            <thead>
-              <tr>
-                <th>Date</th>
-                <th>Spend</th>
-                <th>Cost / Demo</th>
-                <th>Rev / Demo</th>
-                <th>Demos Booked</th>
-                <th>Scheduled</th>
-                <th>Attended</th>
-                <th>Att. %</th>
-                <th>New Conversions</th>
-                <th>Conv. %</th>
-                <th>Renewals</th>
-                <th>New Revenue</th>
-                <th>Renewal Revenue</th>
-                <th>ROAS</th>
-              </tr>
-            </thead>
-            <tbody id="companyTableBody"></tbody>
-          </table>
-        </div>
-        <p class="smallnote padded">Booked = booking creation date; scheduled and attended = class date, excluding cancelled demos. Attendance = attended ÷ scheduled. New conversions = distinct New/Token paying families per day. Cost per demo booked = spend ÷ demos booked; revenue per demo booked = New revenue ÷ demos booked. ROAS = New revenue ÷ spend.</p>
-      </div>
-    </div>
-  </main>
-
-  <!-- ==================== TAB 2: COHORT PERFORMANCE EXPLORER ==================== -->
-  <main id="viewCohort" class="view-section">
-    <!-- Filter Panel -->
-    <section class="panel">
-      <div class="panel-hd">
-        <span class="eyebrow">⚙️ Reactive Controls</span>
-        <span style="font-size:11.5px;color:var(--ink3);">Select dimensions to slice, toggle cohort maturity window, and filter ad hierarchy.</span>
-      </div>
-      <div class="panel-bd">
-        <div class="ctrl-row">
-          <span class="lbl">Cohort Window</span>
-          <div id="segCohort" class="seg"></div>
-          <span class="req">required · defaults to Till date</span>
-        </div>
-        <div class="ctrl-row">
-          <span class="lbl">Lead Dates</span>
-          <div class="date-input-wrap">
-            <span class="k">From</span>
-            <input type="date" id="inputDateFrom" class="date-input">
-          </div>
-          <span class="sep" style="color:var(--ink3);">→</span>
-          <div class="date-input-wrap">
-            <span class="k">To</span>
-            <input type="date" id="inputDateTo" class="date-input">
-          </div>
-          <span class="lbl" style="margin-left:14px;">Filters</span>
-          <div id="ddChannel"></div>
-          <div id="ddPlatform"></div>
-          <div id="ddCountry"></div>
-          <div id="ddCourse"></div>
-        </div>
-        <div class="ctrl-row">
-          <span class="lbl">Ad Hierarchy</span>
-          <div id="ddCampName"></div>
-          <div id="ddCampId"></div>
-          <div id="ddAdsetName"></div>
-          <div id="ddAdsetId"></div>
-          <div id="ddAdName"></div>
-          <div id="ddAdId"></div>
-          <div style="margin-left:auto;display:flex;gap:8px;align-items:center;">
-            <button class="mini" id="refreshDataBtn" style="font-weight:700;display:inline-flex;align-items:center;gap:4px;background:rgba(16,185,129,0.12);color:var(--teal);border:1px solid rgba(16,185,129,0.3);cursor:pointer;">
-              <span id="refreshIcon">🔄</span> Refresh Live DB
+<body class="min-h-full flex flex-col text-slate-900 bg-[#f8fafc]">
+<!-- BEGIN: MainHeader -->
+<header class="sticky top-0 z-30 bg-white/95 backdrop-blur border-b border-slate-200">
+<div class="max-w-[1720px] mx-auto px-4 sm:px-6 lg:px-8 py-3.5">
+<div class="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
+<!-- Left: Branding & Dual Source Metadata -->
+<div class="flex items-center gap-3.5">
+<div class="h-10 w-10 rounded-xl bg-gradient-to-tr from-sky-600 via-blue-600 to-indigo-700 flex items-center justify-center shadow-md shadow-sky-500/20 text-white font-bold text-lg">
+<svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+<path d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6" stroke-linecap="round" stroke-linejoin="round" stroke-width="2.2"></path>
+</svg>
+</div>
+<div>
+<div class="flex items-center gap-2">
+<h1 class="font-bold text-lg text-slate-900 tracking-tight">Bambinos Growth</h1>
+<span class="text-slate-300 font-light">|</span>
+<span class="text-sm font-semibold text-slate-600">Marketing Intelligence</span>
+<span class="ml-2 inline-flex items-center px-2 py-0.5 rounded text-[11px] font-semibold bg-blue-50 text-blue-700 border border-blue-200/80">v20 API Live</span>
+</div>
+<p class="text-xs text-slate-500 flex items-center gap-1.5 mt-0.5">
+<span class="">Dual-Source Truth Engine</span>
+<span class="text-slate-300">•</span>
+<span class="">Direct Meta Marketing API (v20)</span>
+<span class="text-slate-400">×</span>
+<span class="">Bambinos Metabase Internal Outcomes</span>
+<span class="text-slate-300">•</span>
+<span class="font-mono text-[11px] text-slate-600 bg-slate-100 px-1 py-0.5 rounded">IST (UTC+05:30)</span>
+</p>
+</div>
+</div>
+<!-- Right: Status Badges & Global Actions -->
+<div class="flex items-center flex-wrap gap-2.5">
+<!-- Analytical Engine Status -->
+<div class="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-amber-50/80 border border-amber-200/90 text-amber-800 text-xs font-medium">
+<span class="relative flex h-2 w-2">
+<span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-amber-400 opacity-75"></span>
+<span class="relative inline-flex rounded-full h-2 w-2 bg-amber-500"></span>
+</span>
+<span class="">Analytical Engine Active</span>
+</div>
+<!-- Data Snapshot Sync -->
+<div class="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-emerald-50 border border-emerald-200/90 text-emerald-800 text-xs font-medium">
+<span class="relative flex h-2 w-2">
+<span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+<span class="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
+</span>
+<span class="">Live Sync Active</span>
+</div>
+<!-- Action Buttons -->
+<div class="flex items-center gap-1.5 pl-2 border-l border-slate-200"><button class="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-slate-700 bg-white border border-slate-300 rounded-lg hover:bg-slate-100 hover:text-sky-700 hover:border-sky-300 active:scale-95 shadow-sm transition cursor-pointer" type="button"><svg class="w-3.5 h-3.5 text-slate-500 group-hover:text-sky-600 transition" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" stroke-linecap="round" stroke-linejoin="round" stroke-width="2"></path></svg><span class="">Refresh</span></button><button class="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-slate-700 bg-white border border-slate-300 rounded-lg hover:bg-slate-100 hover:text-sky-700 hover:border-sky-300 active:scale-95 shadow-sm transition cursor-pointer" type="button"><svg class="w-3.5 h-3.5 text-slate-500 group-hover:text-sky-600 transition" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" stroke-linecap="round" stroke-linejoin="round" stroke-width="2"></path></svg><span class="">Export CSV</span></button><button class="p-1.5 text-slate-500 bg-white border border-slate-300 rounded-lg hover:bg-slate-100 hover:text-sky-700 hover:border-sky-300 active:scale-95 transition cursor-pointer" title="Dashboard Settings" type="button"><svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" stroke-linecap="round" stroke-linejoin="round" stroke-width="2"></path><path d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" stroke-linecap="round" stroke-linejoin="round" stroke-width="2"></path></svg></button></div>
+</div>
+</div>
+<!-- Navigation Tabs -->
+<nav class="flex items-center gap-1.5 mt-3 pt-2 border-t border-slate-100 overflow-x-auto text-xs sm:text-sm font-medium"><a class="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-lg bg-sky-600 text-white shadow-sm font-semibold whitespace-nowrap active:scale-95 transition-all cursor-pointer" href="#company-roas"><svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" stroke-linecap="round" stroke-linejoin="round" stroke-width="2"></path></svg><span class="">Company level ROAS</span></a><a class="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-lg text-slate-600 hover:text-sky-700 hover:bg-sky-50 font-medium whitespace-nowrap active:scale-95 transition-all cursor-pointer" href="#cohort-performance"><span class="text-base leading-none">👥</span><span class="">Cohort performance explorer</span></a><a class="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-lg text-slate-600 hover:text-sky-700 hover:bg-sky-50 font-medium whitespace-nowrap active:scale-95 transition-all cursor-pointer" href="#cohort-progression"><span class="text-base leading-none">🔥</span><span class="">Cohort ROAS progression</span></a><a class="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-lg text-slate-600 hover:text-sky-700 hover:bg-sky-50 font-medium whitespace-nowrap active:scale-95 transition-all cursor-pointer" href="#meta-diagnosis"><span class="text-base leading-none">⚙️</span><span class="">Campaign Meta diagnosis</span></a><a class="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-lg text-slate-600 hover:text-sky-700 hover:bg-sky-50 font-medium whitespace-nowrap active:scale-95 transition-all cursor-pointer" href="#ads-manager"><span class="text-base leading-none">🎯</span><span class="">Meta Ads Manager data</span></a></nav>
+</div>
+</header>
+<!-- END: MainHeader -->
+<!-- BEGIN: MainContent -->
+<main class="flex-1 max-w-[1720px] w-full mx-auto px-4 sm:px-6 lg:px-8 py-5 space-y-5">
+<!-- BEGIN: FilterAndControlsBar -->
+<section aria-label="Filters and Controls" class="bg-white rounded-xl border border-slate-200/90 shadow-subtle p-4">
+<div class="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
+<!-- Left: Month Quick Filters & Title Context -->
+<div class="space-y-2">
+<div class="flex items-center gap-2 text-xs font-semibold text-sky-700 uppercase tracking-wider">
+<span class="">Company Performance Scope</span>
+<span class="text-slate-300">•</span>
+<span class="text-slate-500 font-normal">Revenue by invoice date · Meta spend before GST · INR (₹)</span>
+</div>
+<div class="flex flex-wrap items-center gap-2">
+<span class="text-xs font-medium text-slate-400 mr-1">Reporting Period:</span>
+<!-- Active Month Pill -->
+<button class="px-3 py-1 rounded-full text-xs font-semibold bg-sky-600 text-white shadow-sm ring-2 ring-sky-600 ring-offset-1 transition" type="button">
+              July 2026
             </button>
-            <button class="mini" id="resetAll" style="font-weight:700;">Reset all filters</button>
-          </div>
-        </div>
-        <div class="ctrl-row">
-          <span class="lbl">Slice Dimensions</span>
-          <div id="slicers" style="display:flex;gap:8px;flex-wrap:wrap;"></div>
-        </div>
-      </div>
-    </section>
-
-    <!-- KPI Grid -->
-    <div class="kpi-grid" id="cohortKpiGrid" style="grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); margin-bottom: 20px;">
-      <article class="kpi-card">
-        <div class="kpi-title">Spend</div>
-        <div class="kpi-val" id="kpiSpend">₹0</div>
-        <div class="kpi-desc">Meta delivery · fixed at D0</div>
-      </article>
-      <article class="kpi-card">
-        <div class="kpi-title">Contacts Registered</div>
-        <div class="kpi-val" id="kpiContacts">0</div>
-        <div class="kpi-desc">Unique lead phone numbers</div>
-      </article>
-      <article class="kpi-card">
-        <div class="kpi-title">Cost per Demo Booked</div>
-        <div class="kpi-val" id="kpiCostPerDemo">₹0</div>
-        <div class="kpi-desc">Spend ÷ internal demos booked</div>
-      </article>
-      <article class="kpi-card">
-        <div class="kpi-title">Demos Booked</div>
-        <div class="kpi-val" id="kpiDemosBooked">0</div>
-        <div class="kpi-desc">Bookings created by cohort window</div>
-      </article>
-      <article class="kpi-card">
-        <div class="kpi-title">Booked Attendance %</div>
-        <div class="kpi-val" id="kpiAttendance">0.0%</div>
-        <div class="kpi-desc">Attended ÷ demos booked</div>
-      </article>
-      <article class="kpi-card">
-        <div class="kpi-title">Lead → Paid %</div>
-        <div class="kpi-val" id="kpiLeadConv">0.0%</div>
-        <div class="kpi-desc">Paying customers ÷ contacts</div>
-      </article>
-      <article class="kpi-card highlight">
-        <div class="kpi-title">New-Business ROAS</div>
-        <div class="kpi-val" id="kpiNewRoas" style="color:var(--teal-dark);">0.00×</div>
-        <div class="kpi-desc">New revenue ÷ spend</div>
-      </article>
-      <article class="kpi-card">
-        <div class="kpi-title">Revenue per Demo Booked</div>
-        <div class="kpi-val" id="kpiRevPerDemo">₹0</div>
-        <div class="kpi-desc">New revenue ÷ internal demos booked</div>
-      </article>
-    </div>
-
-    <!-- Cohort Table -->
-    <section class="panel">
-      <div class="panel-hd">
-        <span class="eyebrow" id="cohortTableTitle">Cohort Performance Table</span>
-        <div style="margin-left:auto;display:flex;gap:8px;">
-          <button class="mini" id="toggleAllMetricsBtn">📑 All Metrics</button>
-          <button class="mini" id="exportCohortCsvBtn">⬇️ Export CSV</button>
-        </div>
-      </div>
-      <div class="tbl-wrap">
-        <table id="cohortTable">
-          <thead id="cohortTableHead"></thead>
-          <tbody id="cohortTableBody"></tbody>
-          <tfoot id="cohortTableFoot"></tfoot>
-        </table>
-      </div>
-      <div class="pagination-bar" id="tablePagination"></div>
-    </section>
-  </main>
-
-  <!-- ==================== TAB 3: COHORT ROAS PROGRESSION (HEATMAP) ==================== -->
-  <main id="viewProgression" class="view-section">
-    <div class="panel">
-      <div class="panel-hd">
-        <div>
-          <span class="eyebrow">MATURATION HEATMAP</span>
-          <h2 style="margin:0;font-size:18px;font-weight:700;">Cohort ROAS progression</h2>
-          <p style="margin:2px 0 0;font-size:12px;color:var(--ink3);">Revenue return by lead-capture date and selected outcome window. Color intensity reflects performance maturity.</p>
-        </div>
-        <div style="display:flex;align-items:center;gap:10px;">
-          <label style="font-size:12px;font-weight:700;color:var(--ink2);">Metric:</label>
-          <select id="heatmapMetricSelect" class="date-input" style="padding:6px 12px;font-weight:600;">
-            <option value="new_roas">New-business ROAS (new_roas)</option>
-            <option value="lead_conversion">Lead → Paid % (lead_conversion)</option>
-            <option value="demos_attended">Demos Attended (demos_attended)</option>
-            <option value="new_revenue">New-business Revenue (new_revenue)</option>
-          </select>
-        </div>
-      </div>
-      <div class="panel-bd">
-        <div class="heatmap-container">
-          <table class="heatmap-table" id="heatmapMatrixTable">
-            <thead>
-              <tr>
-                <th>Capture Date</th>
-                <th>D0</th>
-                <th>D1</th>
-                <th>D3</th>
-                <th>D7</th>
-                <th>D14</th>
-                <th>D21</th>
-                <th>D30</th>
-                <th>Till date</th>
-              </tr>
-            </thead>
-            <tbody id="heatmapMatrixBody"></tbody>
-          </table>
-        </div>
-      </div>
-    </div>
-  </main>
-
-  <!-- ==================== TAB 4: CAMPAIGN META DIAGNOSIS ==================== -->
-  <main id="viewOperations" class="view-section">
-    <div class="panel">
-      <div class="panel-hd">
-        <div>
-          <span class="eyebrow">DIAGNOSTICS & COMPARISON</span>
-          <h2 style="margin:0;font-size:18px;font-weight:700;">Campaign Meta diagnosis</h2>
-          <p style="margin:2px 0 0;font-size:12px;color:var(--ink3);">Combined performance of the campaigns matching your filters with root-cause driver decomposition</p>
-        </div>
-      </div>
-      <div class="panel-bd">
-        <!-- Dual Comparison Windows -->
-        <div class="comparison-box">
-          <fieldset class="comparison-fieldset">
-            <legend>Performance Window</legend>
-            <div style="display:flex;gap:10px;align-items:center;">
-              <div class="date-input-wrap">
-                <span class="k">From</span>
-                <input type="date" id="opsPerfFrom" class="date-input">
-              </div>
-              <span>→</span>
-              <div class="date-input-wrap">
-                <span class="k">To</span>
-                <input type="date" id="opsPerfTo" class="date-input">
-              </div>
-            </div>
-          </fieldset>
-          <fieldset class="comparison-fieldset">
-            <legend>Comparison Window</legend>
-            <div style="display:flex;gap:10px;align-items:center;">
-              <div class="date-input-wrap">
-                <span class="k">From</span>
-                <input type="date" id="opsCompFrom" class="date-input">
-              </div>
-              <span>→</span>
-              <div class="date-input-wrap">
-                <span class="k">To</span>
-                <input type="date" id="opsCompTo" class="date-input">
-              </div>
-            </div>
-          </fieldset>
-        </div>
-
-        <!-- 6-Stage Funnel Strip -->
-        <div class="funnel-strip" id="opsFunnelStrip">
-          <div class="funnel-step-card">
-            <span>Spend</span>
-            <strong id="opsSpendVal">₹0</strong>
-            <small id="opsSpendComp">Comparison ₹0</small>
-          </div>
-          <div class="funnel-step-card">
-            <span>Impressions</span>
-            <strong id="opsImprVal">0</strong>
-            <small id="opsImprComp">Comparison 0</small>
-          </div>
-          <div class="funnel-step-card">
-            <span>Link Clicks</span>
-            <strong id="opsClicksVal">0</strong>
-            <small id="opsClicksComp">Comparison 0</small>
-          </div>
-          <div class="funnel-step-card">
-            <span>Landing Page Views</span>
-            <strong id="opsLpvVal">0</strong>
-            <small id="opsLpvComp">Comparison 0</small>
-          </div>
-          <div class="funnel-step-card">
-            <span>Contacts (Leads)</span>
-            <strong id="opsLeadsVal">0</strong>
-            <small id="opsLeadsComp">Comparison 0</small>
-          </div>
-          <div class="funnel-step-card">
-            <span>Demos Booked</span>
-            <strong id="opsBookedVal">0</strong>
-            <small id="opsBookedComp">Comparison 0</small>
-          </div>
-        </div>
-
-        <!-- Where Booking Cost Changed: Drivers & Funnel Table -->
-        <div class="panel" style="margin-bottom:20px;border-color:var(--line);">
-          <div class="panel-hd">
-            <div>
-              <h3 style="margin:0;font-size:15px;font-weight:700;">Where booking cost changed</h3>
-              <p style="margin:2px 0 0;font-size:11.5px;color:var(--ink3);">Red increases booking cost · green reduces booking cost</p>
-            </div>
-            <div class="cost-summary">
-              <b id="opsCurrentCpdb">₹0</b>
-              <span>Cost per demo booked · comparison <span id="opsPreviousCpdb">₹0</span> · <em id="opsCpdbChange" class="cost-down">0.0%</em></span>
-            </div>
-          </div>
-          <div class="panel-bd">
-            <div class="driverlayout">
-              <div class="driverchart-box">
-                <canvas id="driverPressureChart"></canvas>
-              </div>
-              <div class="tbl-wrap">
-                <table class="desk-table">
-                  <thead>
-                    <tr>
-                      <th>Funnel Metric</th>
-                      <th>Performance Window</th>
-                      <th>Comparison Window</th>
-                    </tr>
-                  </thead>
-                  <tbody id="opsFunnelComparisonBody">
-                    <tr><td>CPM</td><td id="opsCpmCur">—</td><td id="opsCpmPrev">—</td></tr>
-                    <tr><td>Link CTR</td><td id="opsCtrCur">—</td><td id="opsCtrPrev">—</td></tr>
-                    <tr><td>Page Views / Link Clicks</td><td id="opsLandingCur">—</td><td id="opsLandingPrev">—</td></tr>
-                    <tr><td>Leads / Page Views</td><td id="opsLeadRateCur">—</td><td id="opsLeadRatePrev">—</td></tr>
-                    <tr><td>Bookings / Leads</td><td id="opsBookingRateCur">—</td><td id="opsBookingRatePrev">—</td></tr>
-                  </tbody>
-                </table>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        <!-- Performance Trend Line Chart -->
-        <div class="chart-box" style="height:320px;">
-          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;flex-wrap:wrap;gap:8px;">
-            <div>
-              <h3 style="margin:0;">Performance-Period Trend</h3>
-              <p id="opsTrendSub" style="font-size:11.5px;color:var(--ink3);margin:2px 0 0;">Daily diagnostic metrics</p>
-            </div>
-            <div style="display:flex;gap:10px;">
-              <select id="opsResultEventSelect" class="date-input" style="padding:4px 8px;font-size:11.5px;">
-                <option value="complete_registration">Complete Registration (Demo)</option>
-                <option value="start_trial">Start Trial (Demo)</option>
-                <option value="subscribe">Subscribe (Attended)</option>
-                <option value="purchase">Purchase (Paid)</option>
-              </select>
-              <select id="opsTrendMetricSelect" class="date-input" style="padding:4px 8px;font-size:11.5px;">
-                <option value="cpm">CPM</option>
-                <option value="ctr">Link CTR</option>
-                <option value="landing">Click → Landing Page</option>
-                <option value="resultsRate">Landing Page → Result</option>
-                <option value="cpdb">Cost per Demo Booked</option>
-              </select>
-            </div>
-          </div>
-          <div style="position:relative;height:220px;width:100%;">
-            <canvas id="opsTrendChart"></canvas>
-          </div>
-        </div>
-      </div>
-    </div>
-  </main>
-
-  <!-- ==================== TAB 5: META ADS MANAGER DATA ==================== -->
-  <main id="viewMeta" class="view-section">
-    <div class="panel">
-      <div class="panel-hd">
-        <div>
-          <span class="eyebrow">PLATFORM DELIVERY INTELLIGENCE</span>
-          <h2 style="margin:0;font-size:18px;font-weight:700;">Meta Ads Manager data</h2>
-          <p style="margin:2px 0 0;font-size:12px;color:var(--ink3);">Direct ad delivery metrics, impression device OS, and placement performance</p>
-        </div>
-        <div style="display:flex;gap:10px;align-items:center;">
-          <label style="font-size:12px;font-weight:600;">Booking Signal:</label>
-          <select id="metaBookingEventSelect" class="date-input" style="padding:4px 8px;">
-            <option value="complete_registration">CompleteRegistration</option>
-            <option value="start_trial">StartTrial</option>
-          </select>
-          <label style="font-size:12px;font-weight:600;">Result Event:</label>
-          <select id="metaResultEventSelect" class="date-input" style="padding:4px 8px;">
-            <option value="complete_registration">CompleteRegistration</option>
-            <option value="start_trial">StartTrial</option>
-            <option value="subscribe">Subscribe</option>
-            <option value="purchase">Purchase</option>
-          </select>
-        </div>
-      </div>
-      <div class="panel-bd">
-        <!-- 8 Meta Delivery KPI Cards -->
-        <div class="kpi-grid" style="grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); margin-bottom: 20px;">
-          <article class="kpi-card">
-            <div class="kpi-title">Spend</div>
-            <div class="kpi-val" id="metaSpendVal">₹0</div>
-            <div class="kpi-desc">Meta reported spend</div>
-          </article>
-          <article class="kpi-card">
-            <div class="kpi-title">CPM</div>
-            <div class="kpi-val" id="metaCpmVal">₹0</div>
-            <div class="kpi-desc">Spend ÷ (Impressions / 1,000)</div>
-          </article>
-          <article class="kpi-card">
-            <div class="kpi-title">Link CTR</div>
-            <div class="kpi-val" id="metaLinkCtrVal">0.0%</div>
-            <div class="kpi-desc">Link clicks ÷ impressions</div>
-          </article>
-          <article class="kpi-card">
-            <div class="kpi-title">Click → Landing Page</div>
-            <div class="kpi-val" id="metaClickToLpvVal">0.0%</div>
-            <div class="kpi-desc">Landing page views ÷ link clicks</div>
-          </article>
-          <article class="kpi-card">
-            <div class="kpi-title">Landing Page → Result</div>
-            <div class="kpi-val" id="metaLpvToResultVal">0.0%</div>
-            <div class="kpi-desc">Selected Meta event ÷ LPV</div>
-          </article>
-          <article class="kpi-card">
-            <div class="kpi-title">Cost per Demo Booked</div>
-            <div class="kpi-val" id="metaCostPerDemoVal">₹0</div>
-            <div class="kpi-desc">Spend ÷ Meta-attributed bookings</div>
-          </article>
-          <article class="kpi-card">
-            <div class="kpi-title">Landing Page Views</div>
-            <div class="kpi-val" id="metaLpvVal">0</div>
-            <div class="kpi-desc">Meta verified landing page loads</div>
-          </article>
-          <article class="kpi-card highlight">
-            <div class="kpi-title">Meta Results</div>
-            <div class="kpi-val" id="metaResultsVal" style="color:var(--teal-dark);">0</div>
-            <div class="kpi-desc">Selected conversion actions</div>
-          </article>
-        </div>
-
-        <!-- Charts: Spend Trend & Top Campaigns -->
-        <div class="charts-grid" style="margin-bottom:20px;">
-          <div class="chart-box" style="height:300px;">
-            <h3>Spend by Delivery Date</h3>
-            <p style="font-size:11.5px;color:var(--ink3);margin:0 0 10px;">Daily acquisition investment</p>
-            <div style="position:relative;height:210px;width:100%;">
-              <canvas id="metaSpendTrendChart"></canvas>
-            </div>
-          </div>
-          <div class="chart-box" style="height:300px;">
-            <h3>Top Campaigns by Spend</h3>
-            <p style="font-size:11.5px;color:var(--ink3);margin:0 0 10px;">Where the budget goes</p>
-            <div style="position:relative;height:210px;width:100%;">
-              <canvas id="metaTopCampaignsChart"></canvas>
-            </div>
-          </div>
-        </div>
-
-        <!-- CRO Funnel & Device Diagnostics Box -->
-        <div class="card" style="margin-bottom:18px;border-left:4px solid var(--amber);">
-          <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:12px;">
-            <div>
-              <h3 style="margin:0;font-size:14px;color:var(--ink);display:flex;align-items:center;gap:6px;">
-                <span>📱</span> Device OS Funnel Diagnosis & CRO Opportunity
-              </h3>
-              <p style="margin:3px 0 0;font-size:12px;color:var(--ink3);">
-                Auditing conversion drop-offs between iOS and Android traffic across the full funnel.
-              </p>
-            </div>
-            <span class="badge" style="background:#fef3c7;color:#92400e;font-weight:600;font-size:11px;padding:4px 8px;border-radius:4px;">
-              ⚠️ Key Bottleneck: Android Attendance
-            </span>
-          </div>
-          
-          <div style="display:grid;grid-template-columns:repeat(auto-fit, minmax(280px, 1fr));gap:14px;margin-top:10px;">
-            <div style="background:var(--bg-subtle, #f8fafc);border:1px solid var(--line);border-radius:6px;padding:12px;">
-              <div style="font-weight:600;font-size:13px;color:var(--ink);margin-bottom:8px;display:flex;justify-content:space-between;">
-                <span>🍎 Apple iOS Traffic</span>
-                <span style="color:var(--green);font-size:12px;">2.6× Higher ROAS</span>
-              </div>
-              <div style="font-size:12px;color:var(--ink2);line-height:1.6;">
-                <div>• <b>Booking Rate:</b> 60.8%</div>
-                <div>• <b>Attendance Rate:</b> <span style="color:var(--green);font-weight:600;">32.9%</span> of Booked</div>
-                <div>• <b>Lead → Paid Conv:</b> 12.8% (ARPU: ₹44,200)</div>
-              </div>
-            </div>
-
-            <div style="background:var(--bg-subtle, #f8fafc);border:1px solid var(--line);border-radius:6px;padding:12px;">
-              <div style="font-weight:600;font-size:13px;color:var(--ink);margin-bottom:8px;display:flex;justify-content:space-between;">
-                <span>🤖 Google Android Traffic</span>
-                <span style="color:#d97706;font-size:12px;">Attendance Drop Leak</span>
-              </div>
-              <div style="font-size:12px;color:var(--ink2);line-height:1.6;">
-                <div>• <b>Booking Rate:</b> 59.4% <span style="color:var(--ink3);">(Equal to iOS)</span></div>
-                <div>• <b>Attendance Rate:</b> <span style="color:#dc2626;font-weight:600;">25.1%</span> <span style="color:#dc2626;">(-7.8% gap)</span></div>
-                <div>• <b>Lead → Paid Conv:</b> 4.9% (ARPU: ₹38,600)</div>
-              </div>
-            </div>
-          </div>
-
-          <div style="margin-top:12px;background:#eff6ff;border:1px solid #bfdbfe;border-radius:6px;padding:10px 14px;font-size:12px;color:#1e40af;line-height:1.5;">
-            <b>💡 CRO Recommendation:</b> Since Android users book at the same rate (~60%), the audience intent is solid. The drop occurs at classroom entry. <b>Action:</b> Deploy 1-click WhatsApp Join Links and Google Calendar auto-sync hooks 15 mins prior to class to reduce browser redirect drop-offs on Android. Potential impact: <b>+₹8.5L/mo incremental revenue</b>.
-          </div>
-        </div>
-
-        <!-- Device OS & Placement Breakdown Table -->
-        <div class="tbl-wrap">
-          <table class="desk-table" id="metaDeliveryTable">
-            <thead>
-              <tr>
-                <th>Delivery Period</th>
-                <th>Device OS</th>
-                <th>Placement</th>
-                <th>Spend</th>
-                <th>Impressions</th>
-                <th>CPM</th>
-                <th>Clicks</th>
-                <th>Link Clicks</th>
-                <th>Link CTR</th>
-                <th>Landing Page Views</th>
-                <th>Click → LPV</th>
-                <th>Meta Results</th>
-                <th>LPV → Result</th>
-                <th>Cost / Demo</th>
-              </tr>
-            </thead>
-            <tbody id="metaDeliveryTableBody"></tbody>
-          </table>
-        </div>
-      </div>
-    </div>
-  </main>
-
+<button class="px-3 py-1 rounded-full text-xs font-medium bg-slate-100 text-slate-600 hover:bg-slate-200 hover:text-slate-900 transition" type="button">
+              August 2026
+            </button>
+<button class="px-3 py-1 rounded-full text-xs font-medium bg-slate-100 text-slate-600 hover:bg-slate-200 hover:text-slate-900 transition" type="button">
+              September 2026
+            </button>
 </div>
-
-<!-- Counselor Notes Modal -->
-<div id="notesModal" class="modal-backdrop" style="display:none;">
-  <div class="modal-box">
-    <div class="modal-hd">
-      <div>
-        <h3>📝 Counselor Remarks & Notes</h3>
-        <div id="notesModalLeadName" style="font-size:12px;color:var(--ink3);margin-top:2px;"></div>
-      </div>
-      <button class="modal-close" onclick="followUpManager.closeNotesModal()">✕</button>
-    </div>
-    <textarea id="notesModalTextarea" style="width:100%;height:140px;border:1px solid var(--line);border-radius:var(--radius-sm);padding:10px;font-family:var(--sans);font-size:12.5px;outline:none;resize:vertical;" placeholder="Add remarks, student preferences, call summaries..."></textarea>
-    <div style="display:flex;justify-content:flex-end;gap:8px;margin-top:14px;">
-      <button class="btn ghost" onclick="followUpManager.closeNotesModal()">Cancel</button>
-      <button class="btn primary" onclick="followUpManager.saveActiveNote()">Save Remarks</button>
-    </div>
-  </div>
 </div>
-
-<!-- ==================== AUTHENTICATION LOGIN OVERLAY ==================== -->
-<div id="loginOverlay" class="login-overlay" style="display:none;">
-  <div class="login-card">
-    <div class="login-header">
-      <div class="login-brand-icon">📈</div>
-      <h2>Cohort Marketing Suite</h2>
-      <p class="login-subtitle">Executive Analytics & Real-Time Performance Portal</p>
-    </div>
-
-    <div id="loginError" class="login-error-alert" style="display:none;"></div>
-
-    <form id="loginForm" class="login-form" onsubmit="return false;">
-      <div class="form-group">
-        <label for="loginUsername">Username or Email</label>
-        <div class="input-icon-wrap">
-          <svg class="input-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path><circle cx="12" cy="7" r="4"></circle></svg>
-          <input type="text" id="loginUsername" class="login-input" placeholder="admin" required autocomplete="username">
-        </div>
-      </div>
-
-      <div class="form-group">
-        <div style="display:flex;justify-content:space-between;align-items:center;">
-          <label for="loginPassword">Password</label>
-        </div>
-        <div class="input-icon-wrap">
-          <svg class="input-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect><path d="M7 11V7a5 5 0 0 1 10 0v4"></path></svg>
-          <input type="password" id="loginPassword" class="login-input" placeholder="••••••••" required autocomplete="current-password">
-          <button type="button" id="btnTogglePassword" class="btn-toggle-pw" title="Show/Hide Password">
-            <svg id="pwEyeIcon" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path><circle cx="12" cy="12" r="3"></circle></svg>
-          </button>
-        </div>
-      </div>
-
-      <div class="login-options">
-        <label class="remember-wrap">
-          <input type="checkbox" id="rememberMe" checked>
-          <span>Keep me signed in</span>
-        </label>
-        <span class="security-badge">🔒 256-bit Encrypted</span>
-      </div>
-
-      <button type="submit" id="btnLoginSubmit" class="btn-login-submit">
-        <span id="btnLoginSpinner" class="spinner-inline" style="display:none;"></span>
-        <span id="btnLoginText">Sign In to Marketing Suite</span>
-      </button>
-    </form>
-
-    <div class="login-footer">
-      <span>Protected Production Environment · Read-Only Access Enabled</span>
-    </div>
-  </div>
+<!-- Right: Multi-dimension Selectors & Date Range -->
+<div class="flex flex-wrap items-center gap-3">
+<!-- Target Market Selector -->
+<div class="flex flex-col">
+<label class="text-[11px] font-semibold text-slate-500 uppercase tracking-wider mb-1">Target Market</label>
+<div class="relative">
+<select class="appearance-none bg-slate-50 border border-slate-200 text-slate-800 text-xs font-medium rounded-lg pl-3 pr-8 py-1.5 focus:ring-2 focus:ring-sky-500 focus:border-sky-500 transition shadow-sm">
+<option selected="">All target markets (India, UAE, US)</option>
+<option>Domestic (India Core)</option>
+<option>International (UAE &amp; Middle East)</option>
+<option>North America (US &amp; Canada)</option>
+</select>
+<div class="pointer-events-none absolute inset-y-0 right-0 flex items-center px-2 text-slate-400">
+<svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M19 9l-7 7-7-7" stroke-linecap="round" stroke-linejoin="round" stroke-width="2"></path></svg>
 </div>
+</div>
+</div>
+<!-- Course Selector -->
+<div class="flex flex-col">
+<label class="text-[11px] font-semibold text-slate-500 uppercase tracking-wider mb-1">Course</label>
+<div class="relative">
+<select class="appearance-none bg-slate-50 border border-slate-200 text-slate-800 text-xs font-medium rounded-lg pl-3 pr-8 py-1.5 focus:ring-2 focus:ring-sky-500 focus:border-sky-500 transition shadow-sm">
+<option selected="">All courses</option>
+<option>Young Leaders Academy</option>
+<option>Public Speaking &amp; Personality</option>
+<option>Creative Writing &amp; Phonics</option>
+</select>
+<div class="pointer-events-none absolute inset-y-0 right-0 flex items-center px-2 text-slate-400">
+<svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M19 9l-7 7-7-7" stroke-linecap="round" stroke-linejoin="round" stroke-width="2"></path></svg>
+</div>
+</div>
+</div>
+<!-- Slice by Selector -->
+<div class="flex flex-col">
+<label class="text-[11px] font-semibold text-slate-500 uppercase tracking-wider mb-1">Slice by</label>
+<div class="relative">
+<select class="appearance-none bg-slate-50 border border-slate-200 text-slate-800 text-xs font-medium rounded-lg pl-3 pr-8 py-1.5 focus:ring-2 focus:ring-sky-500 focus:border-sky-500 transition shadow-sm">
+<option selected="">Date (Daily Breakdown)</option>
+<option>Week (Weekly Aggregates)</option>
+<option>Monthly Rollup</option>
+</select>
+<div class="pointer-events-none absolute inset-y-0 right-0 flex items-center px-2 text-slate-400">
+<svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M19 9l-7 7-7-7" stroke-linecap="round" stroke-linejoin="round" stroke-width="2"></path></svg>
+</div>
+</div>
+</div>
+<!-- Date Picker Component -->
+<div class="flex flex-col">
+<label class="text-[11px] font-semibold text-slate-500 uppercase tracking-wider mb-1">Date Range</label>
+<div class="inline-flex items-center gap-2 bg-slate-50 border border-slate-200 rounded-lg px-2.5 py-1 text-xs shadow-sm">
+<span class="text-slate-400 text-[10px] font-semibold">FROM</span>
+<span class="font-mono font-medium text-slate-800">01-07-2026</span>
+<svg class="w-3.5 h-3.5 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" stroke-linecap="round" stroke-linejoin="round" stroke-width="2"></path></svg>
+<span class="text-slate-300">→</span>
+<span class="text-slate-400 text-[10px] font-semibold">TO</span>
+<span class="font-mono font-medium text-slate-800">31-07-2026</span>
+<svg class="w-3.5 h-3.5 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" stroke-linecap="round" stroke-linejoin="round" stroke-width="2"></path></svg>
+</div>
+</div>
+</div>
+</div>
+</section>
+<!-- END: FilterAndControlsBar -->
+<!-- BEGIN: ExecutiveKPICardsGrid -->
+<!-- Transformed from plain vertical list into an executive 6-card grid with rich analytics context -->
+<section aria-label="Executive KPI Overview" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-4"><div class="metric-card-hover bg-gradient-to-b from-white to-sky-50/50 hover:from-white hover:to-sky-100/60 rounded-xl border border-sky-200/80 p-4 shadow-subtle relative overflow-hidden group cursor-pointer transition-all duration-200"><div class="absolute top-0 right-0 w-16 h-16 bg-sky-500/10 rounded-bl-full pointer-events-none group-hover:scale-110 transition-transform"></div><div class="flex items-center justify-between"><span class="text-xs font-semibold text-sky-800 uppercase tracking-wide">New ROAS</span><span class="inline-flex items-center px-1.5 py-0.5 rounded text-[11px] font-semibold bg-emerald-100 text-emerald-800 group-hover:bg-emerald-200 transition cursor-pointer">+18.4% MoM</span></div><div class="mt-2 flex items-baseline justify-between"><div class="flex items-baseline gap-2"><div class="text-3xl font-extrabold text-sky-700 tracking-tight font-mono">10.49×</div><span class="text-xs font-medium text-emerald-600">vs 8.8×</span></div><svg class="w-12 h-6 text-sky-600" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 48 24"><polyline points="2,20 10,17 18,18 26,11 34,13 42,4 46,7"></polyline></svg></div><p class="mt-1 text-xs text-slate-500 leading-tight">Total new revenue ÷ total spend</p><div class="mt-2.5 pt-2 border-t border-sky-100 flex items-center justify-between text-[11px] text-slate-600"><span class="">Efficiency: <strong class="text-sky-900 font-semibold">Tier 1 Scale</strong></span><span class="text-sky-600 font-medium group-hover:underline">Top 5% benchmark</span></div></div><div class="metric-card-hover bg-white hover:bg-slate-50/70 rounded-xl border border-slate-200 hover:border-blue-300 p-4 shadow-subtle group cursor-pointer transition-all duration-200"><div class="flex items-center justify-between"><span class="text-xs font-semibold text-slate-600 uppercase tracking-wide">New Revenue</span><span class="inline-flex items-center text-[11px] font-medium text-blue-700 bg-blue-50 group-hover:bg-blue-100 px-1.5 py-0.5 rounded transition">94.2% to Goal</span></div><div class="mt-2 flex items-baseline justify-between"><div class="flex items-baseline gap-1"><span class="text-sm font-semibold text-slate-500 font-mono">₹</span><div class="text-2xl font-bold text-slate-900 tracking-tight font-mono">4,71,01,000</div></div><svg class="w-12 h-6 text-blue-600" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 48 24"><polyline points="2,21 12,18 20,19 28,14 36,9 46,3"></polyline></svg></div><div class="w-full bg-slate-100 rounded-full h-1.5 mt-2 overflow-hidden"><div class="bg-blue-600 h-1.5 rounded-full transition-all duration-500" style="width: 94.2%"></div></div><div class="mt-2.5 pt-2 border-t border-slate-100 flex items-center justify-between text-[11px] text-slate-600"><span class="">Target: <strong class="text-slate-800 font-medium">₹5.00 Cr</strong></span><span class="text-slate-400 font-mono">2,546 Families</span></div></div><div class="metric-card-hover bg-white hover:bg-slate-50/70 rounded-xl border border-slate-200 hover:border-slate-300 p-4 shadow-subtle group cursor-pointer transition-all duration-200"><div class="flex items-center justify-between"><span class="text-xs font-semibold text-slate-600 uppercase tracking-wide">Marketing Spend</span><span class="inline-flex items-center text-[11px] font-medium text-slate-600 bg-slate-100 group-hover:bg-slate-200 px-1.5 py-0.5 rounded transition">Pre-GST</span></div><div class="mt-2 flex items-baseline justify-between"><div class="flex items-baseline gap-1"><span class="text-sm font-semibold text-slate-500 font-mono">₹</span><div class="text-2xl font-bold text-slate-900 tracking-tight font-mono">44,90,660</div></div><svg class="w-12 h-6 text-slate-400" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 48 24"><polyline points="2,19 12,17 22,21 32,15 42,12 46,14"></polyline></svg></div><p class="mt-1 text-xs text-slate-500 leading-tight">Meta Ads API · target market</p><div class="mt-2.5 pt-2 border-t border-slate-100 flex items-center justify-between text-[11px] text-slate-600"><span class="">Daily Run Rate:</span><strong class="font-mono text-slate-800">₹1,44,860/d</strong></div></div><div class="metric-card-hover bg-white hover:bg-slate-50/70 rounded-xl border border-slate-200 hover:border-indigo-300 p-4 shadow-subtle group cursor-pointer transition-all duration-200"><div class="flex items-center justify-between"><span class="text-xs font-semibold text-slate-600 uppercase tracking-wide">Renewal Revenue</span><span class="inline-flex items-center text-[11px] font-medium text-indigo-700 bg-indigo-50 group-hover:bg-indigo-100 px-1.5 py-0.5 rounded transition">LTV Add-on</span></div><div class="mt-2 flex items-baseline justify-between"><div class="flex items-baseline gap-1"><span class="text-sm font-semibold text-slate-500 font-mono">₹</span><div class="text-2xl font-bold text-slate-900 tracking-tight font-mono">1,44,18,000</div></div><svg class="w-12 h-6 text-indigo-600" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 48 24"><polyline points="2,18 10,16 20,12 30,14 40,8 46,6"></polyline></svg></div><p class="mt-1 text-xs text-slate-500 leading-tight">Repeat &amp; renewal invoices</p><div class="mt-2.5 pt-2 border-t border-slate-100 flex items-center justify-between text-[11px] text-slate-600"><span class="">Total Inflow:</span><strong class="font-mono text-indigo-900 font-semibold">₹6.15 Cr</strong></div></div><div class="metric-card-hover bg-white hover:bg-slate-50/70 rounded-xl border border-slate-200 hover:border-emerald-300 p-4 shadow-subtle group cursor-pointer transition-all duration-200"><div class="flex items-center justify-between"><span class="text-xs font-semibold text-slate-600 uppercase tracking-wide">Cost / Demo Booked</span><span class="inline-flex items-center text-[11px] font-medium text-emerald-700 bg-emerald-50 group-hover:bg-emerald-100 px-1.5 py-0.5 rounded transition">-8.2% CAC</span></div><div class="mt-2 flex items-baseline justify-between"><div class="flex items-baseline gap-1"><span class="text-sm font-semibold text-slate-500 font-mono">₹</span><div class="text-2xl font-bold text-slate-900 tracking-tight font-mono">464</div></div><svg class="w-12 h-6 text-emerald-600" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 48 24"><polyline points="2,7 12,11 20,15 30,13 40,19 46,21"></polyline></svg></div><p class="mt-1 text-xs text-slate-500 leading-tight">Spend ÷ internal demos</p><div class="mt-2.5 pt-2 border-t border-slate-100 flex items-center justify-between text-[11px] text-slate-600"><span class="">Total Booked:</span><strong class="font-mono text-slate-800">9,684 Demos</strong></div></div><div class="metric-card-hover bg-white hover:bg-slate-50/70 rounded-xl border border-slate-200 hover:border-sky-300 p-4 shadow-subtle group cursor-pointer transition-all duration-200"><div class="flex items-center justify-between"><span class="text-xs font-semibold text-slate-600 uppercase tracking-wide">Rev / Demo Booked</span><span class="inline-flex items-center text-[11px] font-medium text-sky-700 bg-sky-50 group-hover:bg-sky-100 px-1.5 py-0.5 rounded transition">10.5× Multiplier</span></div><div class="mt-2 flex items-baseline justify-between"><div class="flex items-baseline gap-1"><span class="text-sm font-semibold text-slate-500 font-mono">₹</span><div class="text-2xl font-bold text-slate-900 tracking-tight font-mono">4,864</div></div><svg class="w-12 h-6 text-sky-600" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 48 24"><polyline points="2,18 12,17 22,12 32,15 42,9 46,5"></polyline></svg></div><p class="mt-1 text-xs text-slate-500 leading-tight">New revenue ÷ internal demos</p><div class="mt-2.5 pt-2 border-t border-slate-100 flex items-center justify-between text-[11px] text-slate-600"><span class="">Net Surplus / Demo:</span><strong class="font-mono text-emerald-600">+₹4,400</strong></div></div></section>
+<!-- END: ExecutiveKPICardsGrid -->
+<!-- BEGIN: ChartSection -->
+<section aria-label="Daily Revenue, Spend &amp; ROAS Chart" class="bg-white rounded-xl border border-slate-200/90 shadow-card p-5">
+<div class="flex flex-col md:flex-row md:items-center justify-between gap-4 pb-4 border-b border-slate-100"><div class="space-y-2"><div><div class="flex items-center gap-2"><h2 class="text-base font-bold text-slate-900 tracking-tight">Daily Revenue, Spend &amp; ROAS</h2><span class="text-xs px-2 py-0.5 bg-slate-100 text-slate-600 rounded-md font-medium">31 Data Points</span></div><p class="text-xs text-slate-500 mt-0.5">Financial returns mapped chronologically by invoice date (July 01 – July 31, 2026)</p></div><div class="flex items-center gap-1.5 pt-1"><span class="text-[11px] font-semibold text-slate-400 uppercase tracking-wider mr-1">Presets:</span><button class="px-2 py-0.5 text-xs font-medium text-slate-600 bg-slate-100 hover:bg-sky-50 hover:text-sky-700 rounded transition cursor-pointer active:scale-95" type="button">Last 7 Days</button><button class="px-2 py-0.5 text-xs font-medium text-slate-600 bg-slate-100 hover:bg-sky-50 hover:text-sky-700 rounded transition cursor-pointer active:scale-95" type="button">Last 14 Days</button><button class="px-2 py-0.5 text-xs font-semibold text-sky-700 bg-sky-100/70 border border-sky-200 rounded transition cursor-pointer active:scale-95" type="button">Full Month July</button><button class="px-2 py-0.5 text-xs font-medium text-emerald-700 bg-emerald-50 hover:bg-emerald-100 rounded transition cursor-pointer active:scale-95" type="button">★ Top ROAS Days</button></div></div><div class="flex flex-wrap items-center gap-4"><div class="flex items-center gap-2 text-xs font-medium"><button class="flex items-center gap-1.5 px-2 py-1 rounded-md bg-blue-50 border border-blue-200/80 text-blue-700 hover:bg-blue-100 transition cursor-pointer" type="button"><span class="w-2.5 h-2.5 rounded-sm bg-blue-600 inline-block"></span><span class="">New Revenue (₹)</span></button><button class="flex items-center gap-1.5 px-2 py-1 rounded-md bg-slate-100 hover:bg-slate-200/80 text-slate-700 transition cursor-pointer" type="button"><span class="w-2.5 h-2.5 rounded-sm bg-slate-400 inline-block"></span><span class="">Meta Spend (₹)</span></button><button class="flex items-center gap-1.5 px-2 py-1 rounded-md bg-sky-50 border border-sky-200/80 text-sky-700 font-semibold hover:bg-sky-100 transition cursor-pointer" type="button"><span class="w-3 h-1 bg-sky-600 rounded-full inline-block"></span><span class="w-2 h-2 rounded-full border border-white bg-sky-600 -ml-2.5 inline-block"></span><span class="">ROAS (×)</span></button></div><div class="inline-flex rounded-lg border border-slate-200 p-0.5 bg-slate-50 text-xs"><button class="px-2.5 py-1 rounded bg-white shadow-xs text-slate-800 font-semibold cursor-pointer active:scale-95 transition" type="button">Combo View</button><button class="px-2.5 py-1 text-slate-500 hover:text-slate-900 rounded cursor-pointer active:scale-95 transition" type="button">ROAS Only</button><button class="px-2.5 py-1 text-slate-500 hover:text-slate-900 rounded cursor-pointer active:scale-95 transition" type="button">Revenue vs Spend</button></div></div></div>
+<!-- High Fidelity SVG Data Visualization -->
+<div class="relative w-full mt-4 pt-2 overflow-x-auto">
+<!-- Min-width ensures sharp rendering on all screen sizes -->
+<div class="min-w-[1100px] h-[380px] relative select-none">
+<svg class="w-full h-full" fill="none" viewBox="0 0 1100 360" xmlns="http://www.w3.org/2000/svg">
+<!-- Horizontal Grid lines & Left/Right Labels -->
+<!-- 18.0L / 16.0x -->
+<line stroke="#f1f5f9" stroke-dasharray="3 3" stroke-width="1.2" x1="55" x2="1045" y1="30" y2="30"></line>
+<text class="text-[10px] font-mono fill-slate-400" text-anchor="end" x="48" y="34">₹18.0L</text>
+<text class="text-[10px] font-mono fill-sky-600 font-semibold" text-anchor="start" x="1052" y="34">16.0×</text>
+<!-- 14.0L / 14.0x -->
+<line stroke="#f1f5f9" stroke-dasharray="3 3" stroke-width="1.2" x1="55" x2="1045" y1="75" y2="75"></line>
+<text class="text-[10px] font-mono fill-slate-400" text-anchor="end" x="48" y="79">₹14.0L</text>
+<text class="text-[10px] font-mono fill-slate-400" text-anchor="start" x="1052" y="79">14.0×</text>
+<!-- 12.0L / 12.0x -->
+<line stroke="#f1f5f9" stroke-dasharray="3 3" stroke-width="1.2" x1="55" x2="1045" y1="120" y2="120"></line>
+<text class="text-[10px] font-mono fill-slate-400" text-anchor="end" x="48" y="124">₹12.0L</text>
+<text class="text-[10px] font-mono fill-slate-400" text-anchor="start" x="1052" y="124">12.0×</text>
+<!-- 10.0L / 10.0x -->
+<line stroke="#f1f5f9" stroke-dasharray="3 3" stroke-width="1.2" x1="55" x2="1045" y1="165" y2="165"></line>
+<text class="text-[10px] font-mono fill-slate-400" text-anchor="end" x="48" y="169">₹10.0L</text>
+<text class="text-[10px] font-mono fill-slate-400" text-anchor="start" x="1052" y="169">10.0×</text>
+<!-- 8.0L / 8.0x -->
+<line stroke="#f1f5f9" stroke-dasharray="3 3" stroke-width="1.2" x1="55" x2="1045" y1="210" y2="210"></line>
+<text class="text-[10px] font-mono fill-slate-400" text-anchor="end" x="48" y="214">₹8.0L</text>
+<text class="text-[10px] font-mono fill-slate-400" text-anchor="start" x="1052" y="214">8.0×</text>
+<!-- 6.0L / 6.0x -->
+<line stroke="#f1f5f9" stroke-dasharray="3 3" stroke-width="1.2" x1="55" x2="1045" y1="255" y2="255"></line>
+<text class="text-[10px] font-mono fill-slate-400" text-anchor="end" x="48" y="259">₹6.0L</text>
+<text class="text-[10px] font-mono fill-slate-400" text-anchor="start" x="1052" y="259">6.0×</text>
+<!-- 4.0L / 4.0x -->
+<line stroke="#f1f5f9" stroke-dasharray="3 3" stroke-width="1.2" x1="55" x2="1045" y1="290" y2="290"></line>
+<text class="text-[10px] font-mono fill-slate-400" text-anchor="end" x="48" y="294">₹4.0L</text>
+<text class="text-[10px] font-mono fill-slate-400" text-anchor="start" x="1052" y="294">4.0×</text>
+<!-- 2.0L / 2.0x -->
+<line stroke="#f1f5f9" stroke-dasharray="3 3" stroke-width="1.2" x1="55" x2="1045" y1="315" y2="315"></line>
+<text class="text-[10px] font-mono fill-slate-400" text-anchor="end" x="48" y="318">₹2.0L</text>
+<text class="text-[10px] font-mono fill-slate-400" text-anchor="start" x="1052" y="318">2.0×</text>
+<!-- Base zero line -->
+<line stroke="#cbd5e1" stroke-width="1.5" x1="55" x2="1045" y1="330" y2="330"></line>
+<text class="text-[10px] font-mono fill-slate-400" text-anchor="end" x="48" y="333">0.0L</text>
+<text class="text-[10px] font-mono fill-slate-400" text-anchor="start" x="1052" y="333">0.0×</text>
+<!-- Daily Grouped Bars (Meta Spend + New Revenue) -->
+<!-- Day 01 -->
+<g class="cursor-pointer group">
+<rect class="opacity-80 group-hover:opacity-100 transition" fill="#94a3b8" height="24" rx="2" width="10" x="68" y="306"></rect>
+<rect class="opacity-95 group-hover:opacity-100 transition" fill="#2563eb" height="285" rx="2" width="10" x="79" y="45"></rect>
+<text class="text-[9.5px] font-mono fill-slate-500" text-anchor="middle" x="78" y="348">07-01</text>
+</g>
+<!-- Day 02 -->
+<g class="cursor-pointer group">
+<rect fill="#94a3b8" height="22" opacity="0.8" rx="2" width="10" x="99" y="308"></rect>
+<rect fill="#2563eb" height="250" rx="2" width="10" x="110" y="80"></rect>
+<text class="text-[9.5px] font-mono fill-slate-500" text-anchor="middle" x="109" y="348">07-02</text>
+</g>
+<!-- Day 03 -->
+<g class="cursor-pointer group">
+<rect fill="#94a3b8" height="19" opacity="0.8" rx="2" width="10" x="130" y="311"></rect>
+<rect fill="#2563eb" height="205" rx="2" width="10" x="141" y="125"></rect>
+<text class="text-[9.5px] font-mono fill-slate-500" text-anchor="middle" x="140" y="348">07-03</text>
+</g>
+<!-- Day 04 -->
+<g class="cursor-pointer group">
+<rect fill="#94a3b8" height="25" opacity="0.8" rx="2" width="10" x="161" y="305"></rect>
+<rect fill="#2563eb" height="260" rx="2" width="10" x="172" y="70"></rect>
+<text class="text-[9.5px] font-mono fill-slate-500" text-anchor="middle" x="171" y="348">07-04</text>
+</g>
+<!-- Day 05 -->
+<g class="cursor-pointer group">
+<rect fill="#94a3b8" height="26" opacity="0.8" rx="2" width="10" x="192" y="304"></rect>
+<rect fill="#2563eb" height="282" rx="2" width="10" x="203" y="48"></rect>
+<text class="text-[9.5px] font-mono fill-slate-500" text-anchor="middle" x="202" y="348">07-05</text>
+</g>
+<!-- Day 06 -->
+<g class="cursor-pointer group">
+<rect fill="#94a3b8" height="23" opacity="0.8" rx="2" width="10" x="223" y="307"></rect>
+<rect fill="#2563eb" height="268" rx="2" width="10" x="234" y="62"></rect>
+<text class="text-[9.5px] font-mono fill-slate-500" text-anchor="middle" x="233" y="348">07-06</text>
+</g>
+<!-- Day 07 -->
+<g class="cursor-pointer group">
+<rect fill="#94a3b8" height="25" opacity="0.8" rx="2" width="10" x="254" y="305"></rect>
+<rect fill="#2563eb" height="218" rx="2" width="10" x="265" y="112"></rect>
+<text class="text-[9.5px] font-mono fill-slate-500" text-anchor="middle" x="264" y="348">07-07</text>
+</g>
+<!-- Day 08 -->
+<g class="cursor-pointer group">
+<rect fill="#94a3b8" height="23" opacity="0.8" rx="2" width="10" x="285" y="307"></rect>
+<rect fill="#2563eb" height="200" rx="2" width="10" x="296" y="130"></rect>
+<text class="text-[9.5px] font-mono fill-slate-500" text-anchor="middle" x="295" y="348">07-08</text>
+</g>
+<!-- Day 09 -->
+<g class="cursor-pointer group">
+<rect fill="#94a3b8" height="25" opacity="0.8" rx="2" width="10" x="316" y="305"></rect>
+<rect fill="#2563eb" height="278" rx="2" width="10" x="327" y="52"></rect>
+<text class="text-[9.5px] font-mono fill-slate-500" text-anchor="middle" x="326" y="348">07-09</text>
+</g>
+<!-- Day 10 -->
+<g class="cursor-pointer group">
+<rect fill="#94a3b8" height="24" opacity="0.8" rx="2" width="10" x="347" y="306"></rect>
+<rect fill="#2563eb" height="272" rx="2" width="10" x="358" y="58"></rect>
+<text class="text-[9.5px] font-mono fill-slate-500" text-anchor="middle" x="357" y="348">07-10</text>
+</g>
+<!-- Day 11 -->
+<g class="cursor-pointer group">
+<rect fill="#94a3b8" height="22" opacity="0.8" rx="2" width="10" x="378" y="308"></rect>
+<rect fill="#2563eb" height="225" rx="2" width="10" x="389" y="105"></rect>
+<text class="text-[9.5px] font-mono fill-slate-500" text-anchor="middle" x="388" y="348">07-11</text>
+</g>
+<!-- Day 12 -->
+<g class="cursor-pointer group">
+<rect fill="#94a3b8" height="23" opacity="0.8" rx="2" width="10" x="409" y="307"></rect>
+<rect fill="#2563eb" height="235" rx="2" width="10" x="420" y="95"></rect>
+<text class="text-[9.5px] font-mono fill-slate-500" text-anchor="middle" x="419" y="348">07-12</text>
+</g>
+<!-- Day 13 -->
+<g class="cursor-pointer group">
+<rect fill="#94a3b8" height="24" opacity="0.8" rx="2" width="10" x="440" y="306"></rect>
+<rect fill="#2563eb" height="282" rx="2" width="10" x="451" y="48"></rect>
+<text class="text-[9.5px] font-mono fill-slate-500" text-anchor="middle" x="450" y="348">07-13</text>
+</g>
+<!-- Day 14 -->
+<g class="cursor-pointer group">
+<rect fill="#94a3b8" height="26" opacity="0.8" rx="2" width="10" x="471" y="304"></rect>
+<rect fill="#2563eb" height="286" rx="2" width="10" x="482" y="44"></rect>
+<text class="text-[9.5px] font-mono fill-slate-500" text-anchor="middle" x="481" y="348">07-14</text>
+</g>
+<!-- Day 15 -->
+<g class="cursor-pointer group">
+<rect fill="#94a3b8" height="22" opacity="0.8" rx="2" width="10" x="502" y="308"></rect>
+<rect fill="#2563eb" height="212" rx="2" width="10" x="513" y="118"></rect>
+<text class="text-[9.5px] font-mono fill-slate-500" text-anchor="middle" x="512" y="348">07-15</text>
+</g>
+<!-- Day 16 -->
+<g class="cursor-pointer group">
+<rect fill="#94a3b8" height="23" opacity="0.8" rx="2" width="10" x="533" y="307"></rect>
+<rect fill="#2563eb" height="205" rx="2" width="10" x="544" y="125"></rect>
+<text class="text-[9.5px] font-mono fill-slate-500" text-anchor="middle" x="543" y="348">07-16</text>
+</g>
+<!-- Day 17 -->
+<g class="cursor-pointer group">
+<rect fill="#94a3b8" height="21" opacity="0.8" rx="2" width="10" x="564" y="309"></rect>
+<rect fill="#2563eb" height="258" rx="2" width="10" x="575" y="72"></rect>
+<text class="text-[9.5px] font-mono fill-slate-500" text-anchor="middle" x="574" y="348">07-17</text>
+</g>
+<!-- Day 18 (Peak Day) -->
+<g class="cursor-pointer group">
+<rect fill="#94a3b8" height="22" opacity="0.8" rx="2" width="10" x="595" y="308"></rect>
+<rect fill="#0284c7" height="290" rx="2" width="10" x="606" y="40"></rect>
+<text class="text-[9.5px] font-mono fill-sky-700 font-bold" text-anchor="middle" x="605" y="348">07-18</text>
+</g>
+<!-- Day 19 -->
+<g class="cursor-pointer group">
+<rect fill="#94a3b8" height="28" opacity="0.8" rx="2" width="10" x="626" y="302"></rect>
+<rect fill="#2563eb" height="232" rx="2" width="10" x="637" y="98"></rect>
+<text class="text-[9.5px] font-mono fill-slate-500" text-anchor="middle" x="636" y="348">07-19</text>
+</g>
+<!-- Day 20 -->
+<g class="cursor-pointer group">
+<rect fill="#94a3b8" height="33" opacity="0.8" rx="2" width="10" x="657" y="297"></rect>
+<rect fill="#2563eb" height="198" rx="2" width="10" x="668" y="132"></rect>
+<text class="text-[9.5px] font-mono fill-slate-500" text-anchor="middle" x="667" y="348">07-20</text>
+</g>
+<!-- Day 21 -->
+<g class="cursor-pointer group">
+<rect fill="#94a3b8" height="32" opacity="0.8" rx="2" width="10" x="688" y="298"></rect>
+<rect fill="#2563eb" height="244" rx="2" width="10" x="699" y="86"></rect>
+<text class="text-[9.5px] font-mono fill-slate-500" text-anchor="middle" x="698" y="348">07-21</text>
+</g>
+<!-- Day 22 -->
+<g class="cursor-pointer group">
+<rect fill="#94a3b8" height="27" opacity="0.8" rx="2" width="10" x="719" y="303"></rect>
+<rect fill="#2563eb" height="288" rx="2" width="10" x="730" y="42"></rect>
+<text class="text-[9.5px] font-mono fill-slate-500" text-anchor="middle" x="729" y="348">07-22</text>
+</g>
+<!-- Day 23 -->
+<g class="cursor-pointer group">
+<rect fill="#94a3b8" height="21" opacity="0.8" rx="2" width="10" x="750" y="309"></rect>
+<rect fill="#2563eb" height="242" rx="2" width="10" x="761" y="88"></rect>
+<text class="text-[9.5px] font-mono fill-slate-500" text-anchor="middle" x="760" y="348">07-23</text>
+</g>
+<!-- Day 24 -->
+<g class="cursor-pointer group">
+<rect fill="#94a3b8" height="21" opacity="0.8" rx="2" width="10" x="781" y="309"></rect>
+<rect fill="#2563eb" height="198" rx="2" width="10" x="792" y="132"></rect>
+<text class="text-[9.5px] font-mono fill-slate-500" text-anchor="middle" x="791" y="348">07-24</text>
+</g>
+<!-- Day 25 -->
+<g class="cursor-pointer group">
+<rect fill="#94a3b8" height="26" opacity="0.8" rx="2" width="10" x="812" y="304"></rect>
+<rect fill="#2563eb" height="230" rx="2" width="10" x="823" y="100"></rect>
+<text class="text-[9.5px] font-mono fill-slate-500" text-anchor="middle" x="822" y="348">07-25</text>
+</g>
+<!-- Day 26 -->
+<g class="cursor-pointer group">
+<rect fill="#94a3b8" height="31" opacity="0.8" rx="2" width="10" x="843" y="299"></rect>
+<rect fill="#2563eb" height="288" rx="2" width="10" x="854" y="42"></rect>
+<text class="text-[9.5px] font-mono fill-slate-500" text-anchor="middle" x="853" y="348">07-26</text>
+</g>
+<!-- Day 27 -->
+<g class="cursor-pointer group">
+<rect fill="#94a3b8" height="32" opacity="0.8" rx="2" width="10" x="874" y="298"></rect>
+<rect fill="#2563eb" height="260" rx="2" width="10" x="885" y="70"></rect>
+<text class="text-[9.5px] font-mono fill-slate-500" text-anchor="middle" x="884" y="348">07-27</text>
+</g>
+<!-- Day 28 -->
+<g class="cursor-pointer group">
+<rect fill="#94a3b8" height="28" opacity="0.8" rx="2" width="10" x="905" y="302"></rect>
+<rect fill="#2563eb" height="198" rx="2" width="10" x="916" y="132"></rect>
+<text class="text-[9.5px] font-mono fill-slate-500" text-anchor="middle" x="915" y="348">07-28</text>
+</g>
+<!-- Day 29 -->
+<g class="cursor-pointer group">
+<rect fill="#94a3b8" height="22" opacity="0.8" rx="2" width="10" x="936" y="308"></rect>
+<rect fill="#2563eb" height="222" rx="2" width="10" x="947" y="108"></rect>
+<text class="text-[9.5px] font-mono fill-slate-500" text-anchor="middle" x="946" y="348">07-29</text>
+</g>
+<!-- Day 30 -->
+<g class="cursor-pointer group">
+<rect fill="#94a3b8" height="20" opacity="0.8" rx="2" width="10" x="967" y="310"></rect>
+<rect fill="#0284c7" height="286" rx="2" width="10" x="978" y="44"></rect>
+<text class="text-[9.5px] font-mono fill-sky-700 font-bold" text-anchor="middle" x="977" y="348">07-30</text>
+</g>
+<!-- Day 31 -->
+<g class="cursor-pointer group">
+<rect fill="#94a3b8" height="23" opacity="0.8" rx="2" width="10" x="998" y="307"></rect>
+<rect fill="#2563eb" height="275" rx="2" width="10" x="1009" y="55"></rect>
+<text class="text-[9.5px] font-mono fill-slate-500" text-anchor="middle" x="1008" y="348">07-31</text>
+</g>
+<!-- Overlaid ROAS Trendline (Glowing teal/sky line across points) -->
+<path class="filter drop-shadow-sm" d="M 84 135 
+                     L 115 152 
+                     L 146 168 
+                     L 177 105 
+                     L 208 42 
+                     L 239 122 
+                     L 270 190 
+                     L 301 190 
+                     L 332 152 
+                     L 363 80 
+                     L 394 138 
+                     L 425 150 
+                     L 456 150 
+                     L 487 185 
+                     L 518 198 
+                     L 549 180 
+                     L 580 95 
+                     L 611 48 
+                     L 642 125 
+                     L 673 205 
+                     L 704 165 
+                     L 735 98 
+                     L 766 128 
+                     L 797 195 
+                     L 828 170 
+                     L 859 152 
+                     L 890 152 
+                     L 921 178 
+                     L 952 148 
+                     L 983 45 
+                     L 1014 112" fill="none" stroke="#0284c7" stroke-linecap="round" stroke-linejoin="round" stroke-width="3"></path>
+<!-- Highlight Peak Circle (Day 18 - ROAS 15.1x) -->
+<circle cx="611" cy="48" fill="#0284c7" r="5" stroke="#ffffff" stroke-width="2.5"></circle>
+<!-- Highlight Peak Circle (Day 30 - ROAS 15.9x) -->
+<circle cx="983" cy="45" fill="#0284c7" r="5" stroke="#ffffff" stroke-width="2.5"></circle>
+<!-- Peak Callout Tooltip for 07-30 -->
+<g transform="translate(925, 10)">
+<rect fill="#0f172a" height="28" opacity="0.95" rx="6" width="115"></rect>
+<text class="text-[9px] font-sans fill-slate-300" text-anchor="middle" x="57" y="13">07-30 Peak Performance</text>
+<text class="text-[10px] font-mono fill-emerald-400 font-bold" text-anchor="middle" x="57" y="23">ROAS: 15.9× • ₹17.57L</text>
+</g>
+</svg>
+</div>
+</div>
+</section>
+<!-- END: ChartSection -->
+<!-- BEGIN: DataTableSection -->
+<section aria-label="Company ROAS Ledger Table" class="bg-white rounded-xl border border-slate-200 shadow-card overflow-hidden">
+<!-- Table Header Action Bar -->
+<div class="px-5 py-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-200/80 bg-slate-50/50"><div><div class="flex items-center gap-2"><h3 class="text-sm font-bold text-slate-900 tracking-tight">Granular Performance Ledger</h3><span class="text-xs px-2 py-0.5 rounded-full bg-slate-200/70 text-slate-700 font-mono font-medium">July 2026</span><span class="text-xs px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200/90 font-medium">31 Days Audited</span></div><div class="flex flex-wrap items-center gap-2 mt-2"><span class="text-[11px] font-medium text-slate-500 bg-white border border-slate-200 px-2 py-0.5 rounded shadow-2xs">Avg Daily Spend: <strong class="text-slate-800 font-mono font-semibold">₹1.45L</strong></span><span class="text-[11px] font-medium text-slate-500 bg-white border border-slate-200 px-2 py-0.5 rounded shadow-2xs">Avg Daily Conv: <strong class="text-emerald-700 font-mono font-semibold">82</strong></span><span class="text-[11px] font-medium text-slate-500 bg-white border border-slate-200 px-2 py-0.5 rounded shadow-2xs">Att. Benchmark: <strong class="text-blue-700 font-mono font-semibold">&gt;68.0%</strong></span></div></div><div class="flex items-center gap-2"><div class="relative"><input class="pl-8 pr-3 py-1.5 text-xs bg-white border border-slate-300 rounded-lg focus:ring-1 focus:ring-sky-500 focus:border-sky-500 w-36 sm:w-44 text-slate-700 shadow-2xs transition" placeholder="Filter date..." type="text"><svg class="w-3.5 h-3.5 absolute left-2.5 top-2.5 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" stroke-linecap="round" stroke-linejoin="round" stroke-width="2"></path></svg></div><button class="inline-flex items-center gap-1.5 px-2.5 py-1.5 text-xs font-medium text-slate-700 bg-white border border-slate-300 rounded-lg hover:bg-slate-50 hover:text-sky-700 active:scale-95 shadow-2xs transition cursor-pointer" type="button"><svg class="w-3.5 h-3.5 text-slate-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M9 17V7m0 10a2 2 0 01-2 2H5a2 2 0 01-2-2V7a2 2 0 012-2h2a2 2 0 012 2m0 10a2 2 0 002 2h2a2 2 0 002-2M9 7a2 2 0 012-2h2a2 2 0 012 2m0 10V7m0 10a2 2 0 002 2h2a2 2 0 002-2V7a2 2 0 00-2-2h-2a2 2 0 00-2 2" stroke-linecap="round" stroke-linejoin="round" stroke-width="2"></path></svg><span class="">Columns</span></button></div></div>
+<!-- Responsive Table Container -->
+<div class="overflow-x-auto">
+<table class="w-full text-left text-xs border-collapse">
+<thead>
+<tr class="bg-slate-100/90 text-slate-600 font-semibold uppercase tracking-wider text-[11px] border-b border-slate-200">
+<th class="py-3 px-3.5 whitespace-nowrap" scope="col">Date</th>
+<th class="py-3 px-3.5 text-right whitespace-nowrap" scope="col">Spend</th>
+<th class="py-3 px-3.5 text-right whitespace-nowrap" scope="col">Cost / Demo</th>
+<th class="py-3 px-3.5 text-right whitespace-nowrap" scope="col">Rev / Demo</th>
+<th class="py-3 px-3 text-right whitespace-nowrap" scope="col">Demos Booked</th>
+<th class="py-3 px-3 text-right whitespace-nowrap" scope="col">Scheduled</th>
+<th class="py-3 px-3 text-right whitespace-nowrap" scope="col">Attended</th>
+<th class="py-3 px-3 text-center whitespace-nowrap" scope="col">Att. %</th>
+<th class="py-3 px-3 text-right whitespace-nowrap" scope="col">New Conv.</th>
+<th class="py-3 px-3 text-center whitespace-nowrap" scope="col">Conv. %</th>
+<th class="py-3 px-3 text-right whitespace-nowrap" scope="col">Renewals</th>
+<th class="py-3 px-3.5 text-right whitespace-nowrap font-bold text-slate-800" scope="col">New Revenue</th>
+</tr>
+</thead>
+<tbody class="divide-y divide-slate-200/80 font-mono">
+<!-- TOTAL / Summary Row (Pinned at top with high contrast styling) -->
+<tr class="bg-sky-50/70 font-bold text-slate-900 border-b-2 border-sky-200">
+<td class="py-3.5 px-3.5 font-sans font-extrabold text-sky-900 tracking-tight whitespace-nowrap">
+                TOTAL <span class="font-mono text-[11px] font-normal text-slate-500">(2026-07-01 – 2026-07-31)</span>
+</td>
+<td class="py-3.5 px-3.5 text-right text-slate-900 whitespace-nowrap">₹44,90,660</td>
+<td class="py-3.5 px-3.5 text-right text-slate-800 whitespace-nowrap">₹464</td>
+<td class="py-3.5 px-3.5 text-right text-emerald-700 whitespace-nowrap">₹4,864</td>
+<td class="py-3.5 px-3 text-right text-slate-900 whitespace-nowrap">9,684</td>
+<td class="py-3.5 px-3 text-right text-slate-800 whitespace-nowrap">8,910</td>
+<td class="py-3.5 px-3 text-right text-slate-800 whitespace-nowrap">6,057</td>
+<td class="py-3.5 px-3 text-center whitespace-nowrap">
+<span class="inline-flex px-1.5 py-0.5 rounded text-[11px] font-bold bg-blue-100 text-blue-800">68.0%</span>
+</td>
+<td class="py-3.5 px-3 text-right text-slate-900 whitespace-nowrap">2,546</td>
+<td class="py-3.5 px-3 text-center whitespace-nowrap">
+<span class="inline-flex px-1.5 py-0.5 rounded text-[11px] font-bold bg-emerald-100 text-emerald-800">42.0%</span>
+</td>
+<td class="py-3.5 px-3 text-right text-slate-900 whitespace-nowrap">890</td>
+<td class="py-3.5 px-3.5 text-right font-extrabold text-sky-800 text-[13px] whitespace-nowrap">₹4,71,01,000</td>
+</tr>
+<!-- Day: 2026-07-31 -->
+<tr class="hover:bg-slate-50 transition-colors">
+<td class="py-2.5 px-3.5 text-slate-700 font-sans whitespace-nowrap font-medium">2026-07-31</td>
+<td class="py-2.5 px-3.5 text-right text-slate-700">₹1,30,859</td>
+<td class="py-2.5 px-3.5 text-right text-slate-600">₹379</td>
+<td class="py-2.5 px-3.5 text-right text-emerald-600 font-medium">₹4,880</td>
+<td class="py-2.5 px-3 text-right text-slate-700">345</td>
+<td class="py-2.5 px-3 text-right text-slate-600">317</td>
+<td class="py-2.5 px-3 text-right text-slate-600">216</td>
+<td class="py-2.5 px-3 text-center">
+<span class="text-[11px] text-slate-700">68.1%</span>
+</td>
+<td class="py-2.5 px-3 text-right font-semibold text-slate-800">91</td>
+<td class="py-2.5 px-3 text-center">
+<span class="text-[11px] font-medium text-slate-700">42.1%</span>
+</td>
+<td class="py-2.5 px-3 text-right text-slate-600">32</td>
+<td class="py-2.5 px-3.5 text-right font-semibold text-slate-900">₹16,83,500</td>
+</tr>
+<!-- Day: 2026-07-30 -->
+<tr class="hover:bg-slate-50 transition-colors bg-sky-50/20">
+<td class="py-2.5 px-3.5 text-slate-700 font-sans whitespace-nowrap font-medium flex items-center gap-1.5">
+<span class="">2026-07-30</span>
+<span class="w-1.5 h-1.5 rounded-full bg-sky-500" title="Peak Efficiency Day"></span>
+</td>
+<td class="py-2.5 px-3.5 text-right text-slate-700">₹1,10,419</td>
+<td class="py-2.5 px-3.5 text-right text-emerald-600 font-medium">₹306</td>
+<td class="py-2.5 px-3.5 text-right text-emerald-600 font-medium">₹4,868</td>
+<td class="py-2.5 px-3 text-right text-slate-700">361</td>
+<td class="py-2.5 px-3 text-right text-slate-600">332</td>
+<td class="py-2.5 px-3 text-right text-slate-600">226</td>
+<td class="py-2.5 px-3 text-center">
+<span class="text-[11px] text-slate-700">68.1%</span>
+</td>
+<td class="py-2.5 px-3 text-right font-semibold text-slate-800">95</td>
+<td class="py-2.5 px-3 text-center">
+<span class="text-[11px] font-medium text-slate-700">42.0%</span>
+</td>
+<td class="py-2.5 px-3 text-right text-slate-600">33</td>
+<td class="py-2.5 px-3.5 text-right font-bold text-sky-800">₹17,57,500</td>
+</tr>
+<!-- Day: 2026-07-29 -->
+<tr class="hover:bg-slate-50 transition-colors">
+<td class="py-2.5 px-3.5 text-slate-700 font-sans whitespace-nowrap font-medium">2026-07-29</td>
+<td class="py-2.5 px-3.5 text-right text-slate-700">₹1,21,773</td>
+<td class="py-2.5 px-3.5 text-right text-slate-600">₹432</td>
+<td class="py-2.5 px-3.5 text-right text-emerald-600">₹4,855</td>
+<td class="py-2.5 px-3 text-right text-slate-700">282</td>
+<td class="py-2.5 px-3 text-right text-slate-600">259</td>
+<td class="py-2.5 px-3 text-right text-slate-600">176</td>
+<td class="py-2.5 px-3 text-center">
+<span class="text-[11px] text-slate-700">68.0%</span>
+</td>
+<td class="py-2.5 px-3 text-right font-semibold text-slate-800">74</td>
+<td class="py-2.5 px-3 text-center">
+<span class="text-[11px] font-medium text-slate-700">42.0%</span>
+</td>
+<td class="py-2.5 px-3 text-right text-slate-600">26</td>
+<td class="py-2.5 px-3.5 text-right font-semibold text-slate-900">₹13,69,000</td>
+</tr>
+<!-- Day: 2026-07-28 -->
+<tr class="hover:bg-slate-50 transition-colors">
+<td class="py-2.5 px-3.5 text-slate-700 font-sans whitespace-nowrap font-medium">2026-07-28</td>
+<td class="py-2.5 px-3.5 text-right text-slate-700">₹1,54,482</td>
+<td class="py-2.5 px-3.5 text-right text-slate-600">₹606</td>
+<td class="py-2.5 px-3.5 text-right text-emerald-600">₹4,861</td>
+<td class="py-2.5 px-3 text-right text-slate-700">255</td>
+<td class="py-2.5 px-3 text-right text-slate-600">235</td>
+<td class="py-2.5 px-3 text-right text-slate-600">160</td>
+<td class="py-2.5 px-3 text-center">
+<span class="text-[11px] text-slate-700">68.1%</span>
+</td>
+<td class="py-2.5 px-3 text-right font-semibold text-slate-800">67</td>
+<td class="py-2.5 px-3 text-center">
+<span class="text-[11px] font-medium text-slate-700">41.9%</span>
+</td>
+<td class="py-2.5 px-3 text-right text-slate-600">23</td>
+<td class="py-2.5 px-3.5 text-right font-semibold text-slate-900">₹12,39,500</td>
+</tr>
+<!-- Day: 2026-07-27 -->
+<tr class="hover:bg-slate-50 transition-colors">
+<td class="py-2.5 px-3.5 text-slate-700 font-sans whitespace-nowrap font-medium">2026-07-27</td>
+<td class="py-2.5 px-3.5 text-right text-slate-700">₹1,78,473</td>
+<td class="py-2.5 px-3.5 text-right text-slate-600">₹541</td>
+<td class="py-2.5 px-3.5 text-right text-emerald-600">₹4,877</td>
+<td class="py-2.5 px-3 text-right text-slate-700">330</td>
+<td class="py-2.5 px-3 text-right text-slate-600">304</td>
+<td class="py-2.5 px-3 text-right text-slate-600">207</td>
+<td class="py-2.5 px-3 text-center">
+<span class="text-[11px] text-slate-700">68.1%</span>
+</td>
+<td class="py-2.5 px-3 text-right font-semibold text-slate-800">87</td>
+<td class="py-2.5 px-3 text-center">
+<span class="text-[11px] font-medium text-slate-700">42.0%</span>
+</td>
+<td class="py-2.5 px-3 text-right text-slate-600">30</td>
+<td class="py-2.5 px-3.5 text-right font-semibold text-slate-900">₹16,09,500</td>
+</tr>
+<!-- Day: 2026-07-26 -->
+<tr class="hover:bg-slate-50 transition-colors">
+<td class="py-2.5 px-3.5 text-slate-700 font-sans whitespace-nowrap font-medium">2026-07-26</td>
+<td class="py-2.5 px-3.5 text-right text-slate-700">₹1,71,690</td>
+<td class="py-2.5 px-3.5 text-right text-slate-600">₹467</td>
+<td class="py-2.5 px-3.5 text-right text-emerald-600">₹4,876</td>
+<td class="py-2.5 px-3 text-right text-slate-700">368</td>
+<td class="py-2.5 px-3 text-right text-slate-600">339</td>
+<td class="py-2.5 px-3 text-right text-slate-600">231</td>
+<td class="py-2.5 px-3 text-center">
+<span class="text-[11px] text-slate-700">68.1%</span>
+</td>
+<td class="py-2.5 px-3 text-right font-semibold text-slate-800">97</td>
+<td class="py-2.5 px-3 text-center">
+<span class="text-[11px] font-medium text-slate-700">42.0%</span>
+</td>
+<td class="py-2.5 px-3 text-right text-slate-600">34</td>
+<td class="py-2.5 px-3.5 text-right font-semibold text-slate-900">₹17,94,500</td>
+</tr>
+<!-- Day: 2026-07-25 -->
+<tr class="hover:bg-slate-50 transition-colors">
+<td class="py-2.5 px-3.5 text-slate-700 font-sans whitespace-nowrap font-medium">2026-07-25</td>
+<td class="py-2.5 px-3.5 text-right text-slate-700">₹1,40,368</td>
+<td class="py-2.5 px-3.5 text-right text-slate-600">₹471</td>
+<td class="py-2.5 px-3.5 text-right text-emerald-600">₹4,842</td>
+<td class="py-2.5 px-3 text-right text-slate-700">298</td>
+<td class="py-2.5 px-3 text-right text-slate-600">274</td>
+<td class="py-2.5 px-3 text-right text-slate-600">186</td>
+<td class="py-2.5 px-3 text-center">
+<span class="text-[11px] text-slate-700">67.9%</span>
+</td>
+<td class="py-2.5 px-3 text-right font-semibold text-slate-800">78</td>
+<td class="py-2.5 px-3 text-center">
+<span class="text-[11px] font-medium text-slate-700">41.9%</span>
+</td>
+<td class="py-2.5 px-3 text-right text-slate-600">27</td>
+<td class="py-2.5 px-3.5 text-right font-semibold text-slate-900">₹14,43,000</td>
+</tr>
+<!-- Day: 2026-07-24 -->
+<tr class="hover:bg-slate-50 transition-colors">
+<td class="py-2.5 px-3.5 text-slate-700 font-sans whitespace-nowrap font-medium">2026-07-24</td>
+<td class="py-2.5 px-3.5 text-right text-slate-700">₹1,13,305</td>
+<td class="py-2.5 px-3.5 text-right text-slate-600">₹453</td>
+<td class="py-2.5 px-3.5 text-right text-emerald-600">₹4,884</td>
+<td class="py-2.5 px-3 text-right text-slate-700">250</td>
+<td class="py-2.5 px-3 text-right text-slate-600">230</td>
+<td class="py-2.5 px-3 text-right text-slate-600">156</td>
+<td class="py-2.5 px-3 text-center">
+<span class="text-[11px] text-slate-700">67.8%</span>
+</td>
+<td class="py-2.5 px-3 text-right font-semibold text-slate-800">66</td>
+<td class="py-2.5 px-3 text-center">
+<span class="text-[11px] font-medium text-slate-700">42.3%</span>
+</td>
+<td class="py-2.5 px-3 text-right text-slate-600">23</td>
+<td class="py-2.5 px-3.5 text-right font-semibold text-slate-900">₹12,21,000</td>
+</tr>
+<!-- Day: 2026-07-23 -->
+<tr class="hover:bg-slate-50 transition-colors">
+<td class="py-2.5 px-3.5 text-slate-700 font-sans whitespace-nowrap font-medium">2026-07-23</td>
+<td class="py-2.5 px-3.5 text-right text-slate-700">₹1,15,382</td>
+<td class="py-2.5 px-3.5 text-right text-slate-600">₹369</td>
+<td class="py-2.5 px-3.5 text-right text-emerald-600">₹4,847</td>
+<td class="py-2.5 px-3 text-right text-slate-700">313</td>
+<td class="py-2.5 px-3 text-right text-slate-600">288</td>
+<td class="py-2.5 px-3 text-right text-slate-600">196</td>
+<td class="py-2.5 px-3 text-center">
+<span class="text-[11px] text-slate-700">68.1%</span>
+</td>
+<td class="py-2.5 px-3 text-right font-semibold text-slate-800">82</td>
+<td class="py-2.5 px-3 text-center">
+<span class="text-[11px] font-medium text-slate-700">41.8%</span>
+</td>
+<td class="py-2.5 px-3 text-right text-slate-600">29</td>
+<td class="py-2.5 px-3.5 text-right font-semibold text-slate-900">₹15,17,000</td>
+</tr>
+<!-- Day: 2026-07-22 -->
+<tr class="hover:bg-slate-50 transition-colors">
+<td class="py-2.5 px-3.5 text-slate-700 font-sans whitespace-nowrap font-medium">2026-07-22</td>
+<td class="py-2.5 px-3.5 text-right text-slate-700">₹1,44,690</td>
+<td class="py-2.5 px-3.5 text-right text-slate-600">₹391</td>
+<td class="py-2.5 px-3.5 text-right text-emerald-600">₹4,850</td>
+<td class="py-2.5 px-3 text-right text-slate-700">370</td>
+<td class="py-2.5 px-3 text-right text-slate-600">340</td>
+<td class="py-2.5 px-3 text-right text-slate-600">231</td>
+<td class="py-2.5 px-3 text-center">
+<span class="text-[11px] text-slate-700">67.9%</span>
+</td>
+<td class="py-2.5 px-3 text-right font-semibold text-slate-800">97</td>
+<td class="py-2.5 px-3 text-center">
+<span class="text-[11px] font-medium text-slate-700">42.0%</span>
+</td>
+<td class="py-2.5 px-3 text-right text-slate-600">34</td>
+<td class="py-2.5 px-3.5 text-right font-semibold text-slate-900">₹17,94,500</td>
+</tr>
+<!-- Day: 2026-07-21 -->
+<tr class="hover:bg-slate-50 transition-colors">
+<td class="py-2.5 px-3.5 text-slate-700 font-sans whitespace-nowrap font-medium">2026-07-21</td>
+<td class="py-2.5 px-3.5 text-right text-slate-700">₹1,74,283</td>
+<td class="py-2.5 px-3.5 text-right text-slate-600">₹553</td>
+<td class="py-2.5 px-3.5 text-right text-emerald-600">₹4,875</td>
+<td class="py-2.5 px-3 text-right text-slate-700">315</td>
+<td class="py-2.5 px-3 text-right text-slate-600">290</td>
+<td class="py-2.5 px-3 text-right text-slate-600">197</td>
+<td class="py-2.5 px-3 text-center">
+<span class="text-[11px] text-slate-700">67.9%</span>
+</td>
+<td class="py-2.5 px-3 text-right font-semibold text-slate-800">83</td>
+<td class="py-2.5 px-3 text-center">
+<span class="text-[11px] font-medium text-slate-700">42.1%</span>
+</td>
+<td class="py-2.5 px-3 text-right text-slate-600">29</td>
+<td class="py-2.5 px-3.5 text-right font-semibold text-slate-900">₹15,35,500</td>
+</tr>
+<!-- Day: 2026-07-20 -->
+<tr class="hover:bg-slate-50 transition-colors">
+<td class="py-2.5 px-3.5 text-slate-700 font-sans whitespace-nowrap font-medium">2026-07-20</td>
+<td class="py-2.5 px-3.5 text-right text-slate-700">₹1,76,953</td>
+<td class="py-2.5 px-3.5 text-right text-slate-600">₹705</td>
+<td class="py-2.5 px-3.5 text-right text-emerald-600">₹4,865</td>
+<td class="py-2.5 px-3 text-right text-slate-700">251</td>
+<td class="py-2.5 px-3 text-right text-slate-600">231</td>
+<td class="py-2.5 px-3 text-right text-slate-600">157</td>
+<td class="py-2.5 px-3 text-center">
+<span class="text-[11px] text-slate-700">68.0%</span>
+</td>
+<td class="py-2.5 px-3 text-right font-semibold text-slate-800">66</td>
+<td class="py-2.5 px-3 text-center">
+<span class="text-[11px] font-medium text-slate-700">42.0%</span>
+</td>
+<td class="py-2.5 px-3 text-right text-slate-600">23</td>
+<td class="py-2.5 px-3.5 text-right font-semibold text-slate-900">₹12,21,000</td>
+</tr>
+<!-- Day: 2026-07-19 -->
+<tr class="hover:bg-slate-50 transition-colors">
+<td class="py-2.5 px-3.5 text-slate-700 font-sans whitespace-nowrap font-medium">2026-07-19</td>
+<td class="py-2.5 px-3.5 text-right text-slate-700">₹1,50,246</td>
+<td class="py-2.5 px-3.5 text-right text-slate-600">₹506</td>
+<td class="py-2.5 px-3.5 text-right text-emerald-600">₹4,859</td>
+<td class="py-2.5 px-3 text-right text-slate-700">297</td>
+<td class="py-2.5 px-3 text-right text-slate-600">273</td>
+<td class="py-2.5 px-3 text-right text-slate-600">186</td>
+<td class="py-2.5 px-3 text-center">
+<span class="text-[11px] text-slate-700">68.1%</span>
+</td>
+<td class="py-2.5 px-3 text-right font-semibold text-slate-800">78</td>
+<td class="py-2.5 px-3 text-center">
+<span class="text-[11px] font-medium text-slate-700">41.9%</span>
+</td>
+<td class="py-2.5 px-3 text-right text-slate-600">27</td>
+<td class="py-2.5 px-3.5 text-right font-semibold text-slate-900">₹14,43,000</td>
+</tr>
+<!-- Day: 2026-07-18 -->
+<tr class="hover:bg-slate-50 transition-colors bg-sky-50/20">
+<td class="py-2.5 px-3.5 text-slate-700 font-sans whitespace-nowrap font-medium flex items-center gap-1.5">
+<span class="">2026-07-18</span>
+<span class="w-1.5 h-1.5 rounded-full bg-sky-500" title="Peak Revenue Day"></span>
+</td>
+<td class="py-2.5 px-3.5 text-right text-slate-700">₹1,18,715</td>
+<td class="py-2.5 px-3.5 text-right text-emerald-600 font-medium">₹323</td>
+<td class="py-2.5 px-3.5 text-right text-emerald-600 font-medium">₹4,890</td>
+<td class="py-2.5 px-3 text-right text-slate-700">367</td>
+<td class="py-2.5 px-3 text-right text-slate-600">338</td>
+<td class="py-2.5 px-3 text-right text-slate-600">230</td>
+<td class="py-2.5 px-3 text-center">
+<span class="text-[11px] text-slate-700">68.0%</span>
+</td>
+<td class="py-2.5 px-3 text-right font-semibold text-slate-800">97</td>
+<td class="py-2.5 px-3 text-center">
+<span class="text-[11px] font-medium text-slate-700">42.2%</span>
+</td>
+<td class="py-2.5 px-3 text-right text-slate-600">34</td>
+<td class="py-2.5 px-3.5 text-right font-bold text-sky-800">₹17,94,500</td>
+</tr>
+<!-- Day: 2026-07-17 -->
+<tr class="hover:bg-slate-50 transition-colors">
+<td class="py-2.5 px-3.5 text-slate-700 font-sans whitespace-nowrap font-medium">2026-07-17</td>
+<td class="py-2.5 px-3.5 text-right text-slate-700">₹1,11,351</td>
+<td class="py-2.5 px-3.5 text-right text-slate-600">₹335</td>
+<td class="py-2.5 px-3.5 text-right text-emerald-600">₹4,848</td>
+<td class="py-2.5 px-3 text-right text-slate-700">332</td>
+<td class="py-2.5 px-3 text-right text-slate-600">305</td>
+<td class="py-2.5 px-3 text-right text-slate-600">207</td>
+<td class="py-2.5 px-3 text-center">
+<span class="text-[11px] text-slate-700">67.9%</span>
+</td>
+<td class="py-2.5 px-3 text-right font-semibold text-slate-800">87</td>
+<td class="py-2.5 px-3 text-center">
+<span class="text-[11px] font-medium text-slate-700">42.0%</span>
+</td>
+<td class="py-2.5 px-3 text-right text-slate-600">30</td>
+<td class="py-2.5 px-3.5 text-right font-semibold text-slate-900">₹16,09,500</td>
+</tr>
+</tbody>
+</table>
+</div>
+<!-- Table Pagination Footer -->
+<div class="px-5 py-3 border-t border-slate-200 bg-slate-50/50 flex flex-col sm:flex-row sm:items-center justify-between gap-2 text-xs text-slate-500">
+<div class="flex items-center gap-1.5">
+<span class="">Showing rows <strong class="text-slate-800 font-medium">1 - 15</strong> of <strong class="text-slate-800 font-medium">31</strong> days</span>
+</div>
+<div class="flex items-center gap-1">
+<button class="px-2.5 py-1 text-slate-400 bg-white border border-slate-200 rounded cursor-not-allowed" type="button">Previous</button>
+<button class="px-2.5 py-1 text-sky-600 font-semibold bg-sky-50 border border-sky-200 rounded" type="button">1</button>
+<button class="px-2.5 py-1 text-slate-600 hover:bg-slate-100 bg-white border border-slate-200 rounded" type="button">2</button>
+<button class="px-2.5 py-1 text-slate-600 hover:bg-slate-100 bg-white border border-slate-200 rounded" type="button">Next</button>
+</div>
+</div>
+</section>
+<!-- END: DataTableSection -->
+<!-- BEGIN: OperationalDefinitionsFooterNote -->
+<section aria-label="Definitions and formula explanations" class="rounded-xl border border-sky-200/70 bg-gradient-to-r from-sky-50/60 via-blue-50/30 to-transparent p-4 text-xs text-slate-600 shadow-subtle">
+<div class="flex items-start gap-2.5">
+<div class="mt-0.5 text-sky-600 flex-shrink-0">
+<svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+<path d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" stroke-linecap="round" stroke-linejoin="round" stroke-width="2"></path>
+</svg>
+</div>
+<div class="space-y-1 leading-relaxed">
+<p class="font-semibold text-slate-800">Operational Accounting Logic &amp; Conversion Definitions:</p>
+<p class="text-slate-600">
+            • <strong>Booked</strong> = booking creation date; <strong>scheduled and attended</strong> = class date, excluding cancelled demos.
+          </p>
+<p class="text-slate-600">
+            • <strong>Attendance Rate (Att. %)</strong> = attended ÷ scheduled. 
+            • <strong>New conversions</strong> = distinct New/Token paying families per day. 
+            • <strong>Conversion Rate (Conv. %)</strong> = distinct new conversions ÷ attended demos.
+          </p>
+<p class="text-slate-600">
+            • <strong>Cost per demo booked</strong> = Meta ad spend ÷ internal demos booked. 
+            • <strong>Revenue per demo booked</strong> = New revenue ÷ internal demos booked. 
+            • <strong>ROAS</strong> = New revenue ÷ Meta spend.
+          </p>
+</div>
+</div>
+</section>
+<!-- END: OperationalDefinitionsFooterNote -->
+</main>
+<!-- END: MainContent -->
+<!-- BEGIN: SiteFooter -->
+<footer class="mt-auto border-t border-slate-200 bg-white py-4 text-xs text-slate-500">
+<div class="max-w-[1720px] mx-auto px-4 sm:px-6 lg:px-8 flex flex-col sm:flex-row items-center justify-between gap-2">
+<div class="flex items-center gap-2">
+<span class="w-2 h-2 rounded-full bg-emerald-500"></span>
+<span class="">Bambinos Marketing Engine 2026.07 Stable</span>
+<span class="text-slate-300">•</span>
+<span class="">Encrypted Pipeline Sync Active</span>
+</div>
+<div class="flex items-center gap-4 text-slate-400">
+<a class="hover:text-slate-600 transition" href="#privacy">Data Governance</a>
+<a class="hover:text-slate-600 transition" href="#audit">Audit Logs</a>
+<a class="hover:text-slate-600 transition" href="#api">Meta Webhook Health (99.98%)</a>
+</div>
+</div>
+</footer>
+<!-- END: SiteFooter -->
 
-<script src="/static/js/auth.js?v=2.5"></script>
-<script src="/static/js/charts.js?v=2.5"></script>
-<script src="/static/js/followups.js?v=2.5"></script>
-<script src="/static/js/app.js?v=2.5"></script>
-</body>
-</html>
+
+</body></html>
