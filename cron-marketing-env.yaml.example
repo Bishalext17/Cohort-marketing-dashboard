@@ -16,7 +16,7 @@ DB_READ_ONLY: "false"
 
 # --- Meta Marketing Graph API Config ---
 META_API_VERSION: "v20.0"
-META_AD_ACCOUNT_IDS: "act_123456789,act_987654321"
+META_AD_ACCOUNT_IDS: "act_946867895869898,act_1513945912301435"
 
 # --- Pipeline Tuning ---
 TZ: "Asia/Kolkata"
