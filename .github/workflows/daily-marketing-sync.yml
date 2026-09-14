@@ -1,0 +1,82 @@
+name: Daily Marketing & Cohort Data Pipeline
+
+on:
+  schedule:
+    # Runs daily at 08:00 AM IST (02:30 UTC)
+    - cron: '30 2 * * *'
+  workflow_dispatch:
+    inputs:
+      days:
+        description: 'Number of past days to re-sync (default: 1)'
+        required: false
+        default: '1'
+      date_from:
+        description: 'Custom Start Date (YYYY-MM-DD)'
+        required: false
+        default: ''
+      date_to:
+        description: 'Custom End Date (YYYY-MM-DD)'
+        required: false
+        default: ''
+      mode:
+        description: 'Sync Mode'
+        required: true
+        type: choice
+        options:
+          - incremental
+          - full
+        default: 'incremental'
+      dry_run:
+        description: 'Dry Run (Simulate without writing to DB)'
+        required: false
+        type: boolean
+        default: false
+
+jobs:
+  run-marketing-pipeline:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: 'pip'
+
+      - name: Install Dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r backend/requirements.txt
+
+      - name: Run Test Suite
+        run: |
+          python -m unittest discover -s backend/tests -p "test_*.py"
+
+      - name: Execute Daily Marketing Pipeline
+        env:
+          META_ACCESS_TOKEN: ${{ secrets.META_ACCESS_TOKEN }}
+          META_AD_ACCOUNT_IDS: ${{ secrets.META_AD_ACCOUNT_IDS }}
+          DB_HOST: ${{ secrets.DB_HOST }}
+          DB_USER: ${{ secrets.DB_USER }}
+          DB_PASSWORD: ${{ secrets.DB_PASSWORD }}
+          DB_NAME: ${{ secrets.DB_NAME }}
+          DB_PORT: ${{ secrets.DB_PORT || '3306' }}
+        run: |
+          ARGS="--mode ${{ github.event.inputs.mode || 'incremental' }}"
+          
+          if [ "${{ github.event.inputs.dry_run }}" = "true" ]; then
+            ARGS="$ARGS --dry-run"
+          fi
+          
+          if [ -n "${{ github.event.inputs.date_from }}" ] && [ -n "${{ github.event.inputs.date_to }}" ]; then
+            ARGS="$ARGS --date-from ${{ github.event.inputs.date_from }} --date-to ${{ github.event.inputs.date_to }}"
+          else
+            ARGS="$ARGS --days ${{ github.event.inputs.days || '1' }}"
+          fi
+          
+          echo "Executing: python backend/scripts/run_daily_pipeline.py $ARGS"
+          python backend/scripts/run_daily_pipeline.py $ARGS

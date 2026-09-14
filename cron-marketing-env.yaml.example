@@ -1,0 +1,23 @@
+# =============================================================================
+# Cloud Run Job Environment Configuration: Marketing Intelligence Pipeline
+# =============================================================================
+# NO SECRETS IN THIS FILE.
+# DB_PASS and META_ACCESS_TOKEN are injected from Secret Manager by deploy_marketing_job.sh
+# via --set-secrets, so this file stays safe to commit to version control.
+# =============================================================================
+
+# --- MySQL / MariaDB Socket ---
+# On Cloud Run, the DB is reached through the unix socket mounted by
+# --set-cloudsql-instances, not over TCP.
+DB_SOCKET: "/cloudsql/bambinos-411405:asia-south1:production"
+DB_USER: "admin"
+DB_NAME: "production"
+DB_READ_ONLY: "false"
+
+# --- Meta Marketing Graph API Config ---
+META_API_VERSION: "v20.0"
+META_AD_ACCOUNT_IDS: "act_123456789,act_987654321"
+
+# --- Pipeline Tuning ---
+TZ: "Asia/Kolkata"
+LOG_LEVEL: "INFO"

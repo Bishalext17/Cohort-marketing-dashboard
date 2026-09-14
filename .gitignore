@@ -31,3 +31,6 @@ htmlcov/
 # Logs & audit archives
 logs/*.log*
 *.log
+backend/tests/test_logs*/
+cron-marketing-env.yaml
+!cron-marketing-env.yaml.example
