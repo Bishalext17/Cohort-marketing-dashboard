@@ -90,12 +90,12 @@ args_arr=(
   "--task-timeout" "$TIMEOUT"
   "--cpu" "1"
   "--memory" "2Gi"
+  "--set-env-vars" "DB_SOCKET=/cloudsql/${CLOUD_SQL_INSTANCE},DB_USER=admin,DB_NAME=production,DB_READ_ONLY=false,TZ=Asia/Kolkata,META_API_VERSION=v20.0"
 )
 
 if [[ -f "$ENV_FILE" ]]; then
   args_arr+=("--env-vars-file" "$ENV_FILE")
 elif [[ -f "$(dirname "$0")/cron-marketing-env.yaml.example" ]]; then
-  echo "  ⚠️ Notice: cron-marketing-env.yaml not found, using .example template."
   args_arr+=("--env-vars-file" "$(dirname "$0")/cron-marketing-env.yaml.example")
 fi
 

@@ -41,8 +41,23 @@ class Settings(BaseSettings):
     def SQLALCHEMY_DATABASE_URI(self) -> str:
         escaped_user = urllib.parse.quote_plus(self.MARIADB_USER)
         escaped_pass = urllib.parse.quote_plus(self.MARIADB_PASSWORD)
-        if self.DB_SOCKET:
-            return f"mysql+pymysql://{escaped_user}:{escaped_pass}@/{self.MARIADB_DATABASE}?unix_socket={self.DB_SOCKET}&charset=utf8mb4"
+        
+        socket_path = self.DB_SOCKET
+        if not socket_path:
+            # Auto-detect Cloud Run / Cloud SQL unix socket mount
+            default_cloudsql_socket = f"/cloudsql/{os.getenv('CLOUD_SQL_INSTANCE', 'bambinos-411405:asia-south1:production')}"
+            if os.path.exists(default_cloudsql_socket):
+                socket_path = default_cloudsql_socket
+            elif os.path.exists("/cloudsql"):
+                try:
+                    entries = [os.path.join("/cloudsql", e) for e in os.listdir("/cloudsql") if not e.startswith(".")]
+                    if entries:
+                        socket_path = entries[0]
+                except Exception:
+                    pass
+
+        if socket_path:
+            return f"mysql+pymysql://{escaped_user}:{escaped_pass}@/{self.MARIADB_DATABASE}?unix_socket={socket_path}&charset=utf8mb4"
         return f"mysql+pymysql://{escaped_user}:{escaped_pass}@{self.MARIADB_HOST}:{self.MARIADB_PORT}/{self.MARIADB_DATABASE}?charset=utf8mb4"
     
     # Feature flags & Caching
