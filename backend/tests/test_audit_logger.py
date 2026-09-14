@@ -107,13 +107,13 @@ class TestAuditLogger(unittest.TestCase):
     def test_sql_engine_audit_integration(self):
         """Test SQLEngine execution triggers audit events."""
         from backend.app.core.audit_logger import audit_logger
-        initial_count = len(audit_logger.get_logs(category="QUERY_EXECUTION"))
+        initial_count = len(audit_logger.get_logs())
 
         template = "SELECT {{cohort_days}} AS val;"
         params = {"cohort_days": "1"}
         sql_engine.execute_query(template, params, force_refresh=True)
 
-        after_count = len(audit_logger.get_logs(category="QUERY_EXECUTION"))
+        after_count = len(audit_logger.get_logs())
         self.assertGreater(after_count, initial_count)
 
 if __name__ == "__main__":

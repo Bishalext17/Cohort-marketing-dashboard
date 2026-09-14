@@ -9,16 +9,22 @@ class Settings(BaseSettings):
     VERSION: str = "1.0.0"
     API_V1_STR: str = "/api/v1"
     
-    # Database Connection Details (Supports MARIADB_*, DB_HOST, DB_USER, DB_PASS, DB_NAME)
+    # Database Connection Details (Supports MARIADB_*, DB_HOST, DB_SOCKET, DB_USER, DB_PASS, DB_NAME)
     MARIADB_HOST: str = Field(default="localhost", validation_alias=AliasChoices("DB_HOST", "MARIADB_HOST"))
     MARIADB_PORT: int = Field(default=3306, validation_alias=AliasChoices("DB_PORT", "MARIADB_PORT"))
     MARIADB_USER: str = Field(default="root", validation_alias=AliasChoices("DB_USER", "DB_USERNAME", "MARIADB_USER"))
     MARIADB_PASSWORD: str = Field(default="", validation_alias=AliasChoices("DB_PASS", "DB_PASSWORD", "MARIADB_PASSWORD"))
     MARIADB_DATABASE: str = Field(default="production", validation_alias=AliasChoices("DB_NAME", "MARIADB_DATABASE"))
+    DB_SOCKET: Optional[str] = Field(default=None, validation_alias=AliasChoices("DB_SOCKET", "CLOUD_SQL_SOCKET"))
     
     # Read-Only Safety Enforcer
     DB_READ_ONLY: bool = Field(default=True, validation_alias=AliasChoices("DB_READ_ONLY", "READ_ONLY"))
     
+    # Direct Meta Marketing Graph API Settings
+    META_ACCESS_TOKEN: str = Field(default="", validation_alias=AliasChoices("META_ACCESS_TOKEN", "META_API_KEY", "FB_ACCESS_TOKEN"))
+    META_AD_ACCOUNT_IDS: str = Field(default="", validation_alias=AliasChoices("META_AD_ACCOUNT_IDS", "META_ACCOUNTS", "FB_ACCOUNT_IDS"))
+    META_API_VERSION: str = Field(default="v20.0")
+
     # JWT Authentication Settings
     JWT_SECRET_KEY: str = Field(default="bambinos-cohort-secret-jwt-key-2026-production-secure-random", validation_alias=AliasChoices("JWT_SECRET_KEY", "SECRET_KEY"))
     JWT_ALGORITHM: str = Field(default="HS256")
@@ -35,6 +41,8 @@ class Settings(BaseSettings):
     def SQLALCHEMY_DATABASE_URI(self) -> str:
         escaped_user = urllib.parse.quote_plus(self.MARIADB_USER)
         escaped_pass = urllib.parse.quote_plus(self.MARIADB_PASSWORD)
+        if self.DB_SOCKET:
+            return f"mysql+pymysql://{escaped_user}:{escaped_pass}@/{self.MARIADB_DATABASE}?unix_socket={self.DB_SOCKET}&charset=utf8mb4"
         return f"mysql+pymysql://{escaped_user}:{escaped_pass}@{self.MARIADB_HOST}:{self.MARIADB_PORT}/{self.MARIADB_DATABASE}?charset=utf8mb4"
     
     # Feature flags & Caching
