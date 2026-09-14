@@ -53,6 +53,10 @@ class CohortCacheSyncEngine:
         self.rolling_days = rolling_days
         self.inter_chunk_delay = inter_chunk_delay
         self.dry_run = dry_run
+        # refresh_cohort_cache_all() wipes every cohort_days partition and rebuilds
+        # from p_from to today, so it must always receive the full history start
+        # (see queries/01_production/28_nightly_cache.sql), never a rolling window.
+        self.history_start = os.getenv("COHORT_CACHE_HISTORY_START", "2026-08-07")
 
     def get_date_chunks(self, start_date: str, end_date: str, chunk_days: int = 30) -> List[tuple]:
         """Splits a wide date range into manageable monthly chunks to prevent DB lock contention."""
@@ -111,30 +115,31 @@ class CohortCacheSyncEngine:
 
     def sync_window(self, date_from: str, date_to: str) -> int:
         """
-        Executes incremental materialized cache sync for the given date window.
-        Uses INSERT INTO cohort_detail_cache ... ON DUPLICATE KEY UPDATE.
+        Per-chunk preparation step: reconciles orphan invoice attributions for the
+        window. The cache itself is rebuilt once per run in refresh_cache().
         """
-        # Step 1: Reconcile any orphan invoice attributions before caching
-        self.reconcile_orphan_attributions(date_from, date_to)
+        return self.reconcile_orphan_attributions(date_from, date_to)
 
+    def refresh_cache(self, history_from: str) -> int:
+        """
+        Rebuilds cohort_detail_cache for every cohort window via the
+        refresh_cohort_cache_all(p_from) procedure defined in 28_nightly_cache.sql.
+        """
         if self.dry_run:
-            logger.info(f"[DRY-RUN] Would sync cohort materialized cache from {date_from} to {date_to}.")
+            logger.info(f"[DRY-RUN] Would CALL refresh_cohort_cache_all('{history_from}').")
             return 100
 
         if not check_db_connection() or not engine:
             logger.warning("MariaDB database is disconnected. Skipping live sync execution.")
             return 0
 
-        # Procedure / Optimized Cache Sync Query
-        sync_sql = text("""
-            CALL sp_refresh_cohort_cache_nightly(:date_from, :date_to);
-        """)
+        sync_sql = text("CALL refresh_cohort_cache_all(:history_from);")
 
-        rows_affected = 0
         with engine.begin() as conn:
-            res = conn.execute(sync_sql, {"date_from": date_from, "date_to": date_to})
+            res = conn.execute(sync_sql, {"history_from": history_from})
             rows_affected = res.rowcount if hasattr(res, 'rowcount') and res.rowcount > 0 else 1
 
+        logger.info(f"Cohort cache rebuilt from {history_from} via refresh_cohort_cache_all.")
         return rows_affected
 
     def run_sync(
@@ -178,6 +183,11 @@ class CohortCacheSyncEngine:
                 # Yield lock between chunks to avoid CPU starvation
                 if self.inter_chunk_delay > 0 and idx < len(chunks):
                     time.sleep(self.inter_chunk_delay)
+
+            # The procedure is a full rebuild from p_from, so run it once with the
+            # earliest date we need rather than once per chunk.
+            history_from = min(self.history_start, date_from)
+            total_rows += self.refresh_cache(history_from)
 
             duration_sec = round(time.time() - start_time, 2)
             logger.info(f"Cohort Cache Sync completed successfully in {duration_sec}s.")
