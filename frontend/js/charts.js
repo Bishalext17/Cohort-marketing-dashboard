@@ -5,7 +5,6 @@
  * 2. Campaign Meta Diagnosis Driver Pressure Bars
  * 3. Operations Daily Performance Trend Curves
  * 4. Meta Spend Trends & Top Campaign Rankings
- * 5. Cumulative Cohort Progression Curves
  */
 
 class CohortChartRenderer {
@@ -15,7 +14,11 @@ class CohortChartRenderer {
 
   destroyChart(id) {
     if (this.chartInstances[id]) {
-      this.chartInstances[id].destroy();
+      try {
+        this.chartInstances[id].destroy();
+      } catch (e) {
+        console.warn('Error destroying chart instance:', e);
+      }
       delete this.chartInstances[id];
     }
   }
@@ -39,40 +42,47 @@ class CohortChartRenderer {
         labels: labels,
         datasets: [
           {
+            type: 'line',
+            label: 'ROAS (×)',
+            data: roasValues,
+            borderColor: '#0284c7',
+            backgroundColor: '#0284c7',
+            borderWidth: 2.5,
+            pointRadius: rows.length < 20 ? 4 : 2,
+            pointHoverRadius: 6,
+            pointBackgroundColor: '#ffffff',
+            pointBorderColor: '#0284c7',
+            pointBorderWidth: 2,
+            fill: false,
+            yAxisID: 'yRoas',
+            order: 1
+          },
+          {
             type: 'bar',
-            label: 'New Revenue',
+            label: 'New Revenue (₹)',
             data: revenues,
-            backgroundColor: '#0284C7',
+            backgroundColor: 'rgba(37, 99, 235, 0.85)',
+            hoverBackgroundColor: '#2563eb',
             borderRadius: 4,
             yAxisID: 'yMoney',
             order: 2
           },
           {
             type: 'bar',
-            label: 'Meta Spend',
+            label: 'Meta Spend (₹)',
             data: spends,
-            backgroundColor: '#94A3B8',
+            backgroundColor: 'rgba(148, 163, 184, 0.85)',
+            hoverBackgroundColor: '#94a3b8',
             borderRadius: 4,
             yAxisID: 'yMoney',
             order: 3
-          },
-          {
-            type: 'line',
-            label: 'ROAS',
-            data: roasValues,
-            borderColor: '#0D9488',
-            backgroundColor: '#0D9488',
-            borderWidth: 2.5,
-            pointRadius: rows.length < 20 ? 3 : 1,
-            fill: false,
-            yAxisID: 'yRoas',
-            order: 1
           }
         ]
       },
       options: {
         responsive: true,
         maintainAspectRatio: false,
+        animation: { duration: 400 },
         interaction: {
           mode: 'index',
           intersect: false
@@ -80,14 +90,16 @@ class CohortChartRenderer {
         plugins: {
           legend: {
             position: 'top',
-            labels: { font: { family: 'Inter', size: 11 }, boxWidth: 12 }
+            labels: { font: { family: 'Inter', size: 12 }, boxWidth: 12, usePointStyle: true }
           },
           tooltip: {
+            padding: 10,
+            cornerRadius: 8,
             callbacks: {
               label: function(context) {
                 const label = context.dataset.label || '';
                 const val = context.raw;
-                if (label === 'ROAS') return `${label}: ${val != null ? val.toFixed(2) + '×' : '—'}`;
+                if (label.includes('ROAS')) return `${label}: ${val != null ? val.toFixed(2) + '×' : '—'}`;
                 return `${label}: ₹${Math.round(val).toLocaleString('en-IN')}`;
               }
             }
@@ -96,15 +108,16 @@ class CohortChartRenderer {
         scales: {
           x: {
             grid: { display: false },
-            ticks: { font: { family: 'JetBrains Mono', size: 10 } }
+            ticks: { font: { family: 'JetBrains Mono', size: 10 }, color: '#64748b' }
           },
           yMoney: {
             type: 'linear',
             position: 'left',
-            grid: { color: '#E2E8F0', strokeDasharray: [3, 3] },
+            grid: { color: '#f1f5f9' },
             ticks: {
               font: { family: 'JetBrains Mono', size: 10 },
-              callback: v => v >= 100000 ? (v / 100000).toFixed(1) + 'L' : v >= 1000 ? (v / 1000).toFixed(0) + 'k' : v
+              color: '#64748b',
+              callback: v => v >= 100000 ? '₹' + (v / 100000).toFixed(1) + 'L' : v >= 1000 ? '₹' + (v / 1000).toFixed(0) + 'k' : '₹' + v
             }
           },
           yRoas: {
@@ -113,6 +126,7 @@ class CohortChartRenderer {
             grid: { display: false },
             ticks: {
               font: { family: 'JetBrains Mono', size: 10 },
+              color: '#0284c7',
               callback: v => v.toFixed(1) + '×'
             }
           }
@@ -131,14 +145,14 @@ class CohortChartRenderer {
 
     const labels = drivers.map(d => d.label);
     const pressures = drivers.map(d => d.multiplier != null ? Number(((d.multiplier - 1) * 100).toFixed(1)) : 0);
-    const colors = pressures.map(p => p > 0 ? '#DC2626' : '#16A34A');
+    const colors = pressures.map(p => p > 0 ? 'rgba(239, 68, 68, 0.85)' : 'rgba(16, 185, 129, 0.85)');
 
     this.chartInstances[canvasId] = new Chart(ctx, {
       type: 'bar',
       data: {
         labels: labels,
         datasets: [{
-          label: 'Cost Pressure %',
+          label: 'Cost Impact %',
           data: pressures,
           backgroundColor: colors,
           borderRadius: 4
@@ -148,17 +162,20 @@ class CohortChartRenderer {
         indexAxis: 'y',
         responsive: true,
         maintainAspectRatio: false,
+        animation: { duration: 400 },
         plugins: {
           legend: { display: false },
           tooltip: {
+            padding: 8,
+            cornerRadius: 6,
             callbacks: {
-              label: ctx => `${ctx.raw > 0 ? '+' : ''}${ctx.raw}% booking cost impact`
+              label: ctx => `${ctx.raw > 0 ? '+' : ''}${ctx.raw}% booking cost pressure`
             }
           }
         },
         scales: {
           x: {
-            grid: { color: '#E2E8F0' },
+            grid: { color: '#f1f5f9' },
             ticks: {
               font: { family: 'JetBrains Mono', size: 10 },
               callback: v => (v > 0 ? '+' : '') + v + '%'
@@ -166,7 +183,7 @@ class CohortChartRenderer {
           },
           y: {
             grid: { display: false },
-            ticks: { font: { family: 'Inter', size: 11, weight: '500' } }
+            ticks: { font: { family: 'Inter', size: 11, weight: '500' }, color: '#334155' }
           }
         }
       }
@@ -191,26 +208,33 @@ class CohortChartRenderer {
         datasets: [{
           label: metricLabel,
           data: data,
-          borderColor: '#0284C7',
+          borderColor: '#0284c7',
           backgroundColor: 'rgba(2, 132, 199, 0.1)',
           borderWidth: 2.5,
           fill: true,
-          tension: 0.2,
-          pointRadius: series.length < 20 ? 3 : 1
+          tension: 0.25,
+          pointRadius: 4,
+          pointHoverRadius: 6,
+          pointBackgroundColor: '#ffffff',
+          pointBorderColor: '#0284c7',
+          pointBorderWidth: 2
         }]
       },
       options: {
         responsive: true,
         maintainAspectRatio: false,
+        animation: { duration: 400 },
         plugins: {
           legend: { display: false },
           tooltip: {
+            padding: 8,
+            cornerRadius: 6,
             callbacks: {
               label: ctx => {
                 const v = ctx.raw;
                 if (v == null) return '—';
                 if (['cpm', 'cpc', 'cpdb', 'costPerResult'].includes(metricKey)) return `₹${Math.round(v).toLocaleString('en-IN')}`;
-                if (['ctr', 'landing', 'resultsRate'].includes(metricKey)) return `${(v * 100).toFixed(1)}%`;
+                if (['ctr', 'landing', 'resultsRate'].includes(metricKey)) return `${(v * 100).toFixed(2)}%`;
                 return v;
               }
             }
@@ -219,13 +243,14 @@ class CohortChartRenderer {
         scales: {
           x: {
             grid: { display: false },
-            ticks: { font: { family: 'JetBrains Mono', size: 10 } }
+            ticks: { font: { family: 'JetBrains Mono', size: 10 }, color: '#64748b' }
           },
           y: {
-            grid: { color: '#E2E8F0' },
+            grid: { color: '#f1f5f9' },
             ticks: {
               font: { family: 'JetBrains Mono', size: 10 },
-              callback: v => ['cpm', 'cpc', 'cpdb'].includes(metricKey) ? `₹${Math.round(v)}` : ['ctr', 'landing', 'resultsRate'].includes(metricKey) ? `${(v * 100).toFixed(0)}%` : v
+              color: '#64748b',
+              callback: v => ['cpm', 'cpc', 'cpdb'].includes(metricKey) ? `₹${Math.round(v)}` : ['ctr', 'landing', 'resultsRate'].includes(metricKey) ? `${(v * 100).toFixed(1)}%` : v
             }
           }
         }
@@ -249,33 +274,42 @@ class CohortChartRenderer {
       data: {
         labels: labels,
         datasets: [{
-          label: 'Daily Spend',
+          label: 'Daily Ad Spend',
           data: spends,
-          borderColor: '#0284C7',
-          backgroundColor: 'rgba(2, 132, 199, 0.15)',
+          borderColor: '#0284c7',
+          backgroundColor: 'rgba(2, 132, 199, 0.12)',
           borderWidth: 2,
           fill: true,
-          pointRadius: series.length < 20 ? 3 : 1
+          tension: 0.2,
+          pointRadius: 4,
+          pointHoverRadius: 6,
+          pointBackgroundColor: '#ffffff',
+          pointBorderColor: '#0284c7',
+          pointBorderWidth: 2
         }]
       },
       options: {
         responsive: true,
         maintainAspectRatio: false,
+        animation: { duration: 400 },
         plugins: {
           legend: { display: false },
           tooltip: {
+            padding: 8,
+            cornerRadius: 6,
             callbacks: {
               label: ctx => `Spend: ₹${Math.round(ctx.raw).toLocaleString('en-IN')}`
             }
           }
         },
         scales: {
-          x: { grid: { display: false }, ticks: { font: { family: 'JetBrains Mono', size: 10 } } },
+          x: { grid: { display: false }, ticks: { font: { family: 'JetBrains Mono', size: 10 }, color: '#64748b' } },
           y: {
-            grid: { color: '#E2E8F0' },
+            grid: { color: '#f1f5f9' },
             ticks: {
               font: { family: 'JetBrains Mono', size: 10 },
-              callback: v => v >= 1000 ? `₹${(v/1000).toFixed(0)}k` : `₹${v}`
+              color: '#64748b',
+              callback: v => v >= 100000 ? `₹${(v/100000).toFixed(1)}L` : v >= 1000 ? `₹${(v/1000).toFixed(0)}k` : `₹${v}`
             }
           }
         }
@@ -302,7 +336,8 @@ class CohortChartRenderer {
         datasets: [{
           label: 'Spend',
           data: spends,
-          backgroundColor: '#0D9488',
+          backgroundColor: '#0d9488',
+          hoverBackgroundColor: '#0f766e',
           borderRadius: 4
         }]
       },
@@ -310,9 +345,12 @@ class CohortChartRenderer {
         indexAxis: 'y',
         responsive: true,
         maintainAspectRatio: false,
+        animation: { duration: 400 },
         plugins: {
           legend: { display: false },
           tooltip: {
+            padding: 8,
+            cornerRadius: 6,
             callbacks: {
               label: ctx => `Spend: ₹${Math.round(ctx.raw).toLocaleString('en-IN')}`
             }
@@ -320,15 +358,16 @@ class CohortChartRenderer {
         },
         scales: {
           x: {
-            grid: { color: '#E2E8F0' },
+            grid: { color: '#f1f5f9' },
             ticks: {
               font: { family: 'JetBrains Mono', size: 10 },
-              callback: v => v >= 1000 ? `₹${(v/1000).toFixed(0)}k` : `₹${v}`
+              color: '#64748b',
+              callback: v => v >= 100000 ? `₹${(v/100000).toFixed(1)}L` : v >= 1000 ? `₹${(v/1000).toFixed(0)}k` : `₹${v}`
             }
           },
           y: {
             grid: { display: false },
-            ticks: { font: { family: 'Inter', size: 10 } }
+            ticks: { font: { family: 'Inter', size: 11 }, color: '#334155' }
           }
         }
       }
