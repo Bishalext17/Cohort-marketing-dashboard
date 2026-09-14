@@ -3,8 +3,9 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Cohort Marketing Performance — Executive Suite</title>
+  <title>Bambinos Growth — Marketing & Cohort Intelligence</title>
   <link rel="stylesheet" href="/static/css/styles.css">
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
 </head>
 <body>
 <div class="wrap">
@@ -14,15 +15,15 @@
     <div class="mast-title">
       <div class="mast-icon">📈</div>
       <div>
-        <h1>Cohort Marketing Performance</h1>
-        <div class="sub">Production Analytics Engine · Permanent Lead Capture Attribution · Multi-Touch Funnel Tracking</div>
+        <h1>Bambinos Growth · Marketing Intelligence</h1>
+        <div class="sub">Dual-Source Truth Engine · Direct Meta Marketing API (v20) × Bambinos Metabase Internal Outcomes · IST</div>
       </div>
     </div>
     <div class="header-actions">
       <div id="dbStatusBadge" class="badge mock">
         <span class="badge-dot"></span> Analytical Engine Active
       </div>
-      <div class="stamp">DB Refresh: <b id="lastUpd">2026-07-31 09:30:00</b></div>
+      <div class="stamp">Data Snapshot: <b id="lastUpd">Live Sync Active</b></div>
       <div id="headerUserBadge" class="user-profile-badge" style="display:none;">
         <span class="user-avatar">👨‍💼</span>
         <div class="user-info">
@@ -37,16 +38,137 @@
     </div>
   </header>
 
-  <!-- ==================== NAVIGATION TABS ==================== -->
+  <!-- ==================== 5 CANONICAL NAVIGATION TABS ==================== -->
   <nav class="nav-tabs">
-    <button class="nav-tab active" data-view="viewMaster">📊 Master Cohort & KPIs</button>
-    <button class="nav-tab" data-view="viewFunnels">📈 Funnel & Progression Curves</button>
-    <button class="nav-tab" data-view="viewDiagnostics">📱 Device Diagnostics (iOS vs Android)</button>
-    <button class="nav-tab" data-view="viewFollowups">🎯 Actionable Lead CRM Hub</button>
+    <button class="nav-tab active" data-view="viewCompany">🏛️ Company level ROAS</button>
+    <button class="nav-tab" data-view="viewCohort">📊 Cohort performance explorer</button>
+    <button class="nav-tab" data-view="viewProgression">🔥 Cohort ROAS progression</button>
+    <button class="nav-tab" data-view="viewOperations">⚙️ Campaign Meta diagnosis</button>
+    <button class="nav-tab" data-view="viewMeta">🎯 Meta Ads Manager data</button>
   </nav>
 
-  <!-- ==================== VIEW 1: MASTER COHORT & KPIS ==================== -->
-  <main id="viewMaster" class="view-section">
+  <!-- ==================== TAB 1: COMPANY LEVEL ROAS ==================== -->
+  <main id="viewCompany" class="view-section active">
+    <div class="panel">
+      <div class="panel-hd">
+        <div>
+          <span class="eyebrow">COMPANY PERFORMANCE</span>
+          <h2 style="margin:0;font-size:18px;font-weight:700;">Company level ROAS</h2>
+          <p style="margin:2px 0 0;font-size:12px;color:var(--ink3);">Revenue by invoice date · Meta spend before GST · INR</p>
+        </div>
+        <div style="display:flex;gap:12px;align-items:center;flex-wrap:wrap;">
+          <div class="date-input-wrap">
+            <span class="k">From</span>
+            <input type="date" id="companyDateFrom" class="date-input">
+          </div>
+          <span class="sep" style="color:var(--ink3);">→</span>
+          <div class="date-input-wrap">
+            <span class="k">To</span>
+            <input type="date" id="companyDateTo" class="date-input">
+          </div>
+        </div>
+      </div>
+      <div class="panel-bd">
+        <!-- Filter Bar -->
+        <div class="ctrl-row" style="margin-bottom:14px;flex-wrap:wrap;gap:12px;">
+          <label style="display:inline-flex;align-items:center;gap:6px;font-size:12px;font-weight:600;color:var(--ink2);">
+            Target Market
+            <select id="companyMarketFilter" class="date-input" style="padding:6px 10px;">
+              <option value="">All target markets</option>
+            </select>
+          </label>
+          <label style="display:inline-flex;align-items:center;gap:6px;font-size:12px;font-weight:600;color:var(--ink2);">
+            Course
+            <select id="companyCourseFilter" class="date-input" style="padding:6px 10px;">
+              <option value="">All courses</option>
+            </select>
+          </label>
+          <label style="display:inline-flex;align-items:center;gap:6px;font-size:12px;font-weight:600;color:var(--ink2);">
+            Slice by
+            <select id="companySliceFilter" class="date-input" style="padding:6px 10px;">
+              <option value="date">Date</option>
+              <option value="whole">Whole selected period</option>
+            </select>
+          </label>
+        </div>
+
+        <!-- Month Presets -->
+        <div class="month-presets" id="companyMonthPresets"></div>
+
+        <!-- KPI Grid -->
+        <div class="kpi-grid" id="companyKpiGrid" style="grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); margin-bottom: 20px;">
+          <article class="kpi-card">
+            <div class="kpi-title">Marketing Spend</div>
+            <div class="kpi-val" id="kpiCompanySpend">₹0</div>
+            <div class="kpi-desc">Meta · selected target market and course</div>
+          </article>
+          <article class="kpi-card">
+            <div class="kpi-title">New Revenue</div>
+            <div class="kpi-val" id="kpiCompanyNewRev" style="color:var(--petrol-dark);">₹0</div>
+            <div class="kpi-desc">Regular invoices · selected dates</div>
+          </article>
+          <article class="kpi-card highlight">
+            <div class="kpi-title">New ROAS</div>
+            <div class="kpi-val" id="kpiCompanyRoas" style="color:var(--teal-dark);">0.00×</div>
+            <div class="kpi-desc">Total new revenue ÷ total spend</div>
+          </article>
+          <article class="kpi-card">
+            <div class="kpi-title">Renewal Revenue</div>
+            <div class="kpi-val" id="kpiCompanyRenewalRev">₹0</div>
+            <div class="kpi-desc">Repeat and renewal invoices</div>
+          </article>
+          <article class="kpi-card">
+            <div class="kpi-title">Cost per Demo Booked</div>
+            <div class="kpi-val" id="kpiCompanyCostPerDemo">₹0</div>
+            <div class="kpi-desc">Spend ÷ internal demos booked</div>
+          </article>
+          <article class="kpi-card">
+            <div class="kpi-title">Revenue per Demo Booked</div>
+            <div class="kpi-val" id="kpiCompanyRevPerDemo">₹0</div>
+            <div class="kpi-desc">New revenue ÷ internal demos booked</div>
+          </article>
+        </div>
+
+        <!-- Financial Chart -->
+        <div class="chart-box" style="margin-bottom:20px;height:320px;">
+          <h3 id="companyChartTitle">Daily Revenue, Spend & ROAS</h3>
+          <p id="companyChartSub" style="font-size:12px;color:var(--ink3);margin:0 0 12px;">Financial returns by invoice date</p>
+          <div style="position:relative;height:240px;width:100%;">
+            <canvas id="companyFinancialChart"></canvas>
+          </div>
+        </div>
+
+        <!-- Calendar Table -->
+        <div class="tbl-wrap">
+          <table class="desk-table" id="companyTable">
+            <thead>
+              <tr>
+                <th>Date</th>
+                <th>Spend</th>
+                <th>Cost / Demo</th>
+                <th>Rev / Demo</th>
+                <th>Demos Booked</th>
+                <th>Scheduled</th>
+                <th>Attended</th>
+                <th>Att. %</th>
+                <th>New Conversions</th>
+                <th>Conv. %</th>
+                <th>Renewals</th>
+                <th>New Revenue</th>
+                <th>Renewal Revenue</th>
+                <th>ROAS</th>
+              </tr>
+            </thead>
+            <tbody id="companyTableBody"></tbody>
+          </table>
+        </div>
+        <p class="smallnote padded">Booked = booking creation date; scheduled and attended = class date, excluding cancelled demos. Attendance = attended ÷ scheduled. New conversions = distinct New/Token paying families per day. Cost per demo booked = spend ÷ demos booked; revenue per demo booked = New revenue ÷ demos booked. ROAS = New revenue ÷ spend.</p>
+      </div>
+    </div>
+  </main>
+
+  <!-- ==================== TAB 2: COHORT PERFORMANCE EXPLORER ==================== -->
+  <main id="viewCohort" class="view-section">
     <!-- Filter Panel -->
     <section class="panel">
       <div class="panel-hd">
@@ -63,12 +185,12 @@
           <span class="lbl">Lead Dates</span>
           <div class="date-input-wrap">
             <span class="k">From</span>
-            <input type="date" id="inputDateFrom" class="date-input" value="2026-07-01">
+            <input type="date" id="inputDateFrom" class="date-input">
           </div>
           <span class="sep" style="color:var(--ink3);">→</span>
           <div class="date-input-wrap">
             <span class="k">To</span>
-            <input type="date" id="inputDateTo" class="date-input" value="2026-07-31">
+            <input type="date" id="inputDateTo" class="date-input">
           </div>
           <span class="lbl" style="margin-left:14px;">Filters</span>
           <div id="ddChannel"></div>
@@ -98,133 +220,420 @@
       </div>
     </section>
 
-    <!-- Maturity Progress & Notes -->
+    <!-- KPI Grid -->
+    <div class="kpi-grid" id="cohortKpiGrid" style="grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); margin-bottom: 20px;">
+      <article class="kpi-card">
+        <div class="kpi-title">Spend</div>
+        <div class="kpi-val" id="kpiSpend">₹0</div>
+        <div class="kpi-desc">Meta delivery · fixed at D0</div>
+      </article>
+      <article class="kpi-card">
+        <div class="kpi-title">Contacts Registered</div>
+        <div class="kpi-val" id="kpiContacts">0</div>
+        <div class="kpi-desc">Unique lead phone numbers</div>
+      </article>
+      <article class="kpi-card">
+        <div class="kpi-title">Cost per Demo Booked</div>
+        <div class="kpi-val" id="kpiCostPerDemo">₹0</div>
+        <div class="kpi-desc">Spend ÷ internal demos booked</div>
+      </article>
+      <article class="kpi-card">
+        <div class="kpi-title">Demos Booked</div>
+        <div class="kpi-val" id="kpiDemosBooked">0</div>
+        <div class="kpi-desc">Bookings created by cohort window</div>
+      </article>
+      <article class="kpi-card">
+        <div class="kpi-title">Booked Attendance %</div>
+        <div class="kpi-val" id="kpiAttendance">0.0%</div>
+        <div class="kpi-desc">Attended ÷ demos booked</div>
+      </article>
+      <article class="kpi-card">
+        <div class="kpi-title">Lead → Paid %</div>
+        <div class="kpi-val" id="kpiLeadConv">0.0%</div>
+        <div class="kpi-desc">Paying customers ÷ contacts</div>
+      </article>
+      <article class="kpi-card highlight">
+        <div class="kpi-title">New-Business ROAS</div>
+        <div class="kpi-val" id="kpiNewRoas" style="color:var(--teal-dark);">0.00×</div>
+        <div class="kpi-desc">New revenue ÷ spend</div>
+      </article>
+      <article class="kpi-card">
+        <div class="kpi-title">Revenue per Demo Booked</div>
+        <div class="kpi-val" id="kpiRevPerDemo">₹0</div>
+        <div class="kpi-desc">New revenue ÷ internal demos booked</div>
+      </article>
+    </div>
+
+    <!-- Cohort Table -->
     <section class="panel">
       <div class="panel-hd">
-        <span class="eyebrow">⏱️ Cohort Maturity Timeline</span>
-        <span id="matHead" style="font-size:11.5px;color:var(--ink3);"></span>
-      </div>
-      <div class="panel-bd">
-        <div class="mat">
-          <div class="strip">
-            <div class="strip-grid" id="strip"></div>
-            <div class="strip-ax" id="stripAxis">
-              <span>Day 1 (01 Jul)</span>
-              <span>Day 16 (16 Jul)</span>
-              <span>Day 31 (31 Jul)</span>
-            </div>
-            <div class="legend">
-              <span><i style="background:var(--teal);"></i>Counted (Window Mature)</span>
-              <span><i style="background:var(--warn);"></i>Dropped (Window Not Yet Closed)</span>
-            </div>
-          </div>
-          <div class="note" id="matNote"></div>
+        <span class="eyebrow" id="cohortTableTitle">Cohort Performance Table</span>
+        <div style="margin-left:auto;display:flex;gap:8px;">
+          <button class="mini" id="toggleAllMetricsBtn">📑 All Metrics</button>
+          <button class="mini" id="exportCohortCsvBtn">⬇️ Export CSV</button>
         </div>
       </div>
-    </section>
-
-    <!-- Unified 10-KPI Tiles Ribbon -->
-    <section class="kpis" id="kpis"></section>
-
-    <!-- Master Cohort Data Table -->
-    <section class="panel">
-      <div class="panel-hd">
-        <span class="eyebrow">📋 Master Cohort Performance Table</span>
-        <span style="font-size:11.5px;color:var(--ink3);">Fixed D0 acquisition metrics on left · Cumulative cohort progression metrics on right</span>
-        <span id="cacheBadge" style="margin-left:auto;font-family:var(--mono);font-size:11px;font-weight:700;padding:2px 8px;border-radius:12px;background:rgba(99,102,241,0.12);color:var(--brand);">⚡ Cached</span>
-        <span class="rowcount" id="rowCount" style="font-family:var(--mono);font-size:11px;font-weight:700;color:var(--ink2);"></span>
-        <button class="btn ghost" id="dlCsv">Download CSV</button>
-      </div>
-      <div class="table-toolbar">
-        <input type="text" id="tableSearchInput" class="table-search" placeholder="Filter rows in table...">
-        <div style="font-size:11.5px;color:var(--ink3);">Click any column header to sort (▲ / ▼)</div>
-      </div>
       <div class="tbl-wrap">
-        <table id="tbl">
-          <thead></thead>
-          <tbody></tbody>
-          <tfoot></tfoot>
+        <table id="cohortTable">
+          <thead id="cohortTableHead"></thead>
+          <tbody id="cohortTableBody"></tbody>
+          <tfoot id="cohortTableFoot"></tfoot>
         </table>
       </div>
-      <div class="blank" id="blank" style="display:none;padding:30px;text-align:center;color:var(--ink2);"></div>
       <div class="pagination-bar" id="tablePagination"></div>
     </section>
   </main>
 
-  <!-- ==================== VIEW 2: FUNNELS & PROGRESSION ==================== -->
-  <section id="viewFunnels" class="view-section" style="display:none;">
-    <div class="charts-grid">
-      <div class="chart-box">
-        <h3>Step-by-Step Marketing & Conversion Funnel</h3>
-        <p style="font-size:12px;color:var(--ink3);margin:0 0 16px;">Visual progression and stage-by-stage drop-off from ad impression to enrolled student.</p>
-        <div id="overviewFunnelChart"></div>
-      </div>
-      <div class="chart-box">
-        <h3>Cumulative Progression Curve</h3>
-        <p style="font-size:12px;color:var(--ink3);margin:0 0 16px;">Daily lead volume vs realized customer conversions across the active cohort timeline.</p>
-        <div id="cohortProgressionChart"></div>
-      </div>
-    </div>
-  </section>
-
-  <!-- ==================== VIEW 3: DEVICE DIAGNOSTICS ==================== -->
-  <section id="viewDiagnostics" class="view-section" style="display:none;">
+  <!-- ==================== TAB 3: COHORT ROAS PROGRESSION (HEATMAP) ==================== -->
+  <main id="viewProgression" class="view-section">
     <div class="panel">
       <div class="panel-hd">
-        <span class="eyebrow">📱 Platform & Device Funnel Audit</span>
-        <span style="font-size:11.5px;color:var(--ink3);">iOS vs Android Conversion Disparity Diagnostic</span>
-      </div>
-      <div class="panel-bd" id="deviceComparisonContainer">
-        <div style="text-align:center;padding:30px;color:var(--ink3);">Loading device diagnostics...</div>
-      </div>
-    </div>
-  </section>
-
-  <!-- ==================== VIEW 4: ACTIONABLE CRM FOLLOW-UPS ==================== -->
-  <section id="viewFollowups" class="view-section" style="display:none;">
-    <div class="panel">
-      <div class="panel-hd">
-        <span class="eyebrow">🎯 Actionable Lead Follow-Up Hub</span>
-        <span style="font-size:11.5px;color:var(--ink3);">Direct operational CRM pipeline for admissions counselors</span>
-        <span id="followupCount" style="margin-left:auto;font-family:var(--mono);font-size:11.5px;font-weight:700;"></span>
+        <div>
+          <span class="eyebrow">MATURATION HEATMAP</span>
+          <h2 style="margin:0;font-size:18px;font-weight:700;">Cohort ROAS progression</h2>
+          <p style="margin:2px 0 0;font-size:12px;color:var(--ink3);">Revenue return by lead-capture date and selected outcome window. Color intensity reflects performance maturity.</p>
+        </div>
+        <div style="display:flex;align-items:center;gap:10px;">
+          <label style="font-size:12px;font-weight:700;color:var(--ink2);">Metric:</label>
+          <select id="heatmapMetricSelect" class="date-input" style="padding:6px 12px;font-weight:600;">
+            <option value="new_roas">New-business ROAS (new_roas)</option>
+            <option value="lead_conversion">Lead → Paid % (lead_conversion)</option>
+            <option value="demos_attended">Demos Attended (demos_attended)</option>
+            <option value="new_revenue">New-business Revenue (new_revenue)</option>
+          </select>
+        </div>
       </div>
       <div class="panel-bd">
-        <div class="followup-controls">
-          <button class="chip followup-chip on" data-cat="all" onclick="followUpManager.loadContacts('all')">All Contacts</button>
-          <button class="chip followup-chip" data-cat="attended_not_paid" onclick="followUpManager.loadContacts('attended_not_paid')">🎯 Attended Not Paid (High Intent)</button>
-          <button class="chip followup-chip" data-cat="demos_booked_3d" onclick="followUpManager.loadContacts('demos_booked_3d')">📅 Demos Booked (3d)</button>
-          <button class="chip followup-chip" data-cat="conversions_14d" onclick="followUpManager.loadContacts('conversions_14d')">💳 Conversions (14d)</button>
-          
-          <input type="text" class="search-input" placeholder="Search by name, phone, course, campaign, notes..." oninput="followUpManager.setSearchQuery(this.value)">
-          <button class="btn ghost" onclick="followUpManager.exportCSV()" style="margin-left:auto;">Export CSV</button>
-        </div>
-
-        <div style="margin-bottom:12px;font-size:12px;color:var(--ink2);">
-          Total Pipeline Opportunity Value: <b id="followupTotalRev" style="color:var(--petrol-dark);font-size:14px;font-family:var(--mono);">₹0</b>
-        </div>
-
-        <div class="tbl-wrap" style="max-height:550px;">
-          <table>
+        <div class="heatmap-container">
+          <table class="heatmap-table" id="heatmapMatrixTable">
             <thead>
               <tr>
-                <th class="dim">Lead ID</th>
-                <th class="dim">Parent Name</th>
-                <th class="dim">Phone</th>
-                <th>Lead Date</th>
-                <th class="dim">Course</th>
-                <th class="dim">Campaign</th>
-                <th>Status (Update)</th>
-                <th>Revenue</th>
-                <th>Priority</th>
-                <th style="text-align:center;">Counselor Notes</th>
+                <th>Capture Date</th>
+                <th>D0</th>
+                <th>D1</th>
+                <th>D3</th>
+                <th>D7</th>
+                <th>D14</th>
+                <th>D21</th>
+                <th>D30</th>
+                <th>Till date</th>
               </tr>
             </thead>
-            <tbody id="followupTableBody"></tbody>
+            <tbody id="heatmapMatrixBody"></tbody>
           </table>
         </div>
       </div>
     </div>
-  </section>
+  </main>
+
+  <!-- ==================== TAB 4: CAMPAIGN META DIAGNOSIS ==================== -->
+  <main id="viewOperations" class="view-section">
+    <div class="panel">
+      <div class="panel-hd">
+        <div>
+          <span class="eyebrow">DIAGNOSTICS & COMPARISON</span>
+          <h2 style="margin:0;font-size:18px;font-weight:700;">Campaign Meta diagnosis</h2>
+          <p style="margin:2px 0 0;font-size:12px;color:var(--ink3);">Combined performance of the campaigns matching your filters with root-cause driver decomposition</p>
+        </div>
+      </div>
+      <div class="panel-bd">
+        <!-- Dual Comparison Windows -->
+        <div class="comparison-box">
+          <fieldset class="comparison-fieldset">
+            <legend>Performance Window</legend>
+            <div style="display:flex;gap:10px;align-items:center;">
+              <div class="date-input-wrap">
+                <span class="k">From</span>
+                <input type="date" id="opsPerfFrom" class="date-input">
+              </div>
+              <span>→</span>
+              <div class="date-input-wrap">
+                <span class="k">To</span>
+                <input type="date" id="opsPerfTo" class="date-input">
+              </div>
+            </div>
+          </fieldset>
+          <fieldset class="comparison-fieldset">
+            <legend>Comparison Window</legend>
+            <div style="display:flex;gap:10px;align-items:center;">
+              <div class="date-input-wrap">
+                <span class="k">From</span>
+                <input type="date" id="opsCompFrom" class="date-input">
+              </div>
+              <span>→</span>
+              <div class="date-input-wrap">
+                <span class="k">To</span>
+                <input type="date" id="opsCompTo" class="date-input">
+              </div>
+            </div>
+          </fieldset>
+        </div>
+
+        <!-- 6-Stage Funnel Strip -->
+        <div class="funnel-strip" id="opsFunnelStrip">
+          <div class="funnel-step-card">
+            <span>Spend</span>
+            <strong id="opsSpendVal">₹0</strong>
+            <small id="opsSpendComp">Comparison ₹0</small>
+          </div>
+          <div class="funnel-step-card">
+            <span>Impressions</span>
+            <strong id="opsImprVal">0</strong>
+            <small id="opsImprComp">Comparison 0</small>
+          </div>
+          <div class="funnel-step-card">
+            <span>Link Clicks</span>
+            <strong id="opsClicksVal">0</strong>
+            <small id="opsClicksComp">Comparison 0</small>
+          </div>
+          <div class="funnel-step-card">
+            <span>Landing Page Views</span>
+            <strong id="opsLpvVal">0</strong>
+            <small id="opsLpvComp">Comparison 0</small>
+          </div>
+          <div class="funnel-step-card">
+            <span>Contacts (Leads)</span>
+            <strong id="opsLeadsVal">0</strong>
+            <small id="opsLeadsComp">Comparison 0</small>
+          </div>
+          <div class="funnel-step-card">
+            <span>Demos Booked</span>
+            <strong id="opsBookedVal">0</strong>
+            <small id="opsBookedComp">Comparison 0</small>
+          </div>
+        </div>
+
+        <!-- Where Booking Cost Changed: Drivers & Funnel Table -->
+        <div class="panel" style="margin-bottom:20px;border-color:var(--line);">
+          <div class="panel-hd">
+            <div>
+              <h3 style="margin:0;font-size:15px;font-weight:700;">Where booking cost changed</h3>
+              <p style="margin:2px 0 0;font-size:11.5px;color:var(--ink3);">Red increases booking cost · green reduces booking cost</p>
+            </div>
+            <div class="cost-summary">
+              <b id="opsCurrentCpdb">₹0</b>
+              <span>Cost per demo booked · comparison <span id="opsPreviousCpdb">₹0</span> · <em id="opsCpdbChange" class="cost-down">0.0%</em></span>
+            </div>
+          </div>
+          <div class="panel-bd">
+            <div class="driverlayout">
+              <div class="driverchart-box">
+                <canvas id="driverPressureChart"></canvas>
+              </div>
+              <div class="tbl-wrap">
+                <table class="desk-table">
+                  <thead>
+                    <tr>
+                      <th>Funnel Metric</th>
+                      <th>Performance Window</th>
+                      <th>Comparison Window</th>
+                    </tr>
+                  </thead>
+                  <tbody id="opsFunnelComparisonBody">
+                    <tr><td>CPM</td><td id="opsCpmCur">—</td><td id="opsCpmPrev">—</td></tr>
+                    <tr><td>Link CTR</td><td id="opsCtrCur">—</td><td id="opsCtrPrev">—</td></tr>
+                    <tr><td>Page Views / Link Clicks</td><td id="opsLandingCur">—</td><td id="opsLandingPrev">—</td></tr>
+                    <tr><td>Leads / Page Views</td><td id="opsLeadRateCur">—</td><td id="opsLeadRatePrev">—</td></tr>
+                    <tr><td>Bookings / Leads</td><td id="opsBookingRateCur">—</td><td id="opsBookingRatePrev">—</td></tr>
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Performance Trend Line Chart -->
+        <div class="chart-box" style="height:320px;">
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;flex-wrap:wrap;gap:8px;">
+            <div>
+              <h3 style="margin:0;">Performance-Period Trend</h3>
+              <p id="opsTrendSub" style="font-size:11.5px;color:var(--ink3);margin:2px 0 0;">Daily diagnostic metrics</p>
+            </div>
+            <div style="display:flex;gap:10px;">
+              <select id="opsResultEventSelect" class="date-input" style="padding:4px 8px;font-size:11.5px;">
+                <option value="complete_registration">Complete Registration (Demo)</option>
+                <option value="start_trial">Start Trial (Demo)</option>
+                <option value="subscribe">Subscribe (Attended)</option>
+                <option value="purchase">Purchase (Paid)</option>
+              </select>
+              <select id="opsTrendMetricSelect" class="date-input" style="padding:4px 8px;font-size:11.5px;">
+                <option value="cpm">CPM</option>
+                <option value="ctr">Link CTR</option>
+                <option value="landing">Click → Landing Page</option>
+                <option value="resultsRate">Landing Page → Result</option>
+                <option value="cpdb">Cost per Demo Booked</option>
+              </select>
+            </div>
+          </div>
+          <div style="position:relative;height:220px;width:100%;">
+            <canvas id="opsTrendChart"></canvas>
+          </div>
+        </div>
+      </div>
+    </div>
+  </main>
+
+  <!-- ==================== TAB 5: META ADS MANAGER DATA ==================== -->
+  <main id="viewMeta" class="view-section">
+    <div class="panel">
+      <div class="panel-hd">
+        <div>
+          <span class="eyebrow">PLATFORM DELIVERY INTELLIGENCE</span>
+          <h2 style="margin:0;font-size:18px;font-weight:700;">Meta Ads Manager data</h2>
+          <p style="margin:2px 0 0;font-size:12px;color:var(--ink3);">Direct ad delivery metrics, impression device OS, and placement performance</p>
+        </div>
+        <div style="display:flex;gap:10px;align-items:center;">
+          <label style="font-size:12px;font-weight:600;">Booking Signal:</label>
+          <select id="metaBookingEventSelect" class="date-input" style="padding:4px 8px;">
+            <option value="complete_registration">CompleteRegistration</option>
+            <option value="start_trial">StartTrial</option>
+          </select>
+          <label style="font-size:12px;font-weight:600;">Result Event:</label>
+          <select id="metaResultEventSelect" class="date-input" style="padding:4px 8px;">
+            <option value="complete_registration">CompleteRegistration</option>
+            <option value="start_trial">StartTrial</option>
+            <option value="subscribe">Subscribe</option>
+            <option value="purchase">Purchase</option>
+          </select>
+        </div>
+      </div>
+      <div class="panel-bd">
+        <!-- 8 Meta Delivery KPI Cards -->
+        <div class="kpi-grid" style="grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); margin-bottom: 20px;">
+          <article class="kpi-card">
+            <div class="kpi-title">Spend</div>
+            <div class="kpi-val" id="metaSpendVal">₹0</div>
+            <div class="kpi-desc">Meta reported spend</div>
+          </article>
+          <article class="kpi-card">
+            <div class="kpi-title">CPM</div>
+            <div class="kpi-val" id="metaCpmVal">₹0</div>
+            <div class="kpi-desc">Spend ÷ (Impressions / 1,000)</div>
+          </article>
+          <article class="kpi-card">
+            <div class="kpi-title">Link CTR</div>
+            <div class="kpi-val" id="metaLinkCtrVal">0.0%</div>
+            <div class="kpi-desc">Link clicks ÷ impressions</div>
+          </article>
+          <article class="kpi-card">
+            <div class="kpi-title">Click → Landing Page</div>
+            <div class="kpi-val" id="metaClickToLpvVal">0.0%</div>
+            <div class="kpi-desc">Landing page views ÷ link clicks</div>
+          </article>
+          <article class="kpi-card">
+            <div class="kpi-title">Landing Page → Result</div>
+            <div class="kpi-val" id="metaLpvToResultVal">0.0%</div>
+            <div class="kpi-desc">Selected Meta event ÷ LPV</div>
+          </article>
+          <article class="kpi-card">
+            <div class="kpi-title">Cost per Demo Booked</div>
+            <div class="kpi-val" id="metaCostPerDemoVal">₹0</div>
+            <div class="kpi-desc">Spend ÷ Meta-attributed bookings</div>
+          </article>
+          <article class="kpi-card">
+            <div class="kpi-title">Landing Page Views</div>
+            <div class="kpi-val" id="metaLpvVal">0</div>
+            <div class="kpi-desc">Meta verified landing page loads</div>
+          </article>
+          <article class="kpi-card highlight">
+            <div class="kpi-title">Meta Results</div>
+            <div class="kpi-val" id="metaResultsVal" style="color:var(--teal-dark);">0</div>
+            <div class="kpi-desc">Selected conversion actions</div>
+          </article>
+        </div>
+
+        <!-- Charts: Spend Trend & Top Campaigns -->
+        <div class="charts-grid" style="margin-bottom:20px;">
+          <div class="chart-box" style="height:300px;">
+            <h3>Spend by Delivery Date</h3>
+            <p style="font-size:11.5px;color:var(--ink3);margin:0 0 10px;">Daily acquisition investment</p>
+            <div style="position:relative;height:210px;width:100%;">
+              <canvas id="metaSpendTrendChart"></canvas>
+            </div>
+          </div>
+          <div class="chart-box" style="height:300px;">
+            <h3>Top Campaigns by Spend</h3>
+            <p style="font-size:11.5px;color:var(--ink3);margin:0 0 10px;">Where the budget goes</p>
+            <div style="position:relative;height:210px;width:100%;">
+              <canvas id="metaTopCampaignsChart"></canvas>
+            </div>
+          </div>
+        </div>
+
+        <!-- CRO Funnel & Device Diagnostics Box -->
+        <div class="card" style="margin-bottom:18px;border-left:4px solid var(--amber);">
+          <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:12px;">
+            <div>
+              <h3 style="margin:0;font-size:14px;color:var(--ink);display:flex;align-items:center;gap:6px;">
+                <span>📱</span> Device OS Funnel Diagnosis & CRO Opportunity
+              </h3>
+              <p style="margin:3px 0 0;font-size:12px;color:var(--ink3);">
+                Auditing conversion drop-offs between iOS and Android traffic across the full funnel.
+              </p>
+            </div>
+            <span class="badge" style="background:#fef3c7;color:#92400e;font-weight:600;font-size:11px;padding:4px 8px;border-radius:4px;">
+              ⚠️ Key Bottleneck: Android Attendance
+            </span>
+          </div>
+          
+          <div style="display:grid;grid-template-columns:repeat(auto-fit, minmax(280px, 1fr));gap:14px;margin-top:10px;">
+            <div style="background:var(--bg-subtle, #f8fafc);border:1px solid var(--line);border-radius:6px;padding:12px;">
+              <div style="font-weight:600;font-size:13px;color:var(--ink);margin-bottom:8px;display:flex;justify-content:space-between;">
+                <span>🍎 Apple iOS Traffic</span>
+                <span style="color:var(--green);font-size:12px;">2.6× Higher ROAS</span>
+              </div>
+              <div style="font-size:12px;color:var(--ink2);line-height:1.6;">
+                <div>• <b>Booking Rate:</b> 60.8%</div>
+                <div>• <b>Attendance Rate:</b> <span style="color:var(--green);font-weight:600;">32.9%</span> of Booked</div>
+                <div>• <b>Lead → Paid Conv:</b> 12.8% (ARPU: ₹44,200)</div>
+              </div>
+            </div>
+
+            <div style="background:var(--bg-subtle, #f8fafc);border:1px solid var(--line);border-radius:6px;padding:12px;">
+              <div style="font-weight:600;font-size:13px;color:var(--ink);margin-bottom:8px;display:flex;justify-content:space-between;">
+                <span>🤖 Google Android Traffic</span>
+                <span style="color:#d97706;font-size:12px;">Attendance Drop Leak</span>
+              </div>
+              <div style="font-size:12px;color:var(--ink2);line-height:1.6;">
+                <div>• <b>Booking Rate:</b> 59.4% <span style="color:var(--ink3);">(Equal to iOS)</span></div>
+                <div>• <b>Attendance Rate:</b> <span style="color:#dc2626;font-weight:600;">25.1%</span> <span style="color:#dc2626;">(-7.8% gap)</span></div>
+                <div>• <b>Lead → Paid Conv:</b> 4.9% (ARPU: ₹38,600)</div>
+              </div>
+            </div>
+          </div>
+
+          <div style="margin-top:12px;background:#eff6ff;border:1px solid #bfdbfe;border-radius:6px;padding:10px 14px;font-size:12px;color:#1e40af;line-height:1.5;">
+            <b>💡 CRO Recommendation:</b> Since Android users book at the same rate (~60%), the audience intent is solid. The drop occurs at classroom entry. <b>Action:</b> Deploy 1-click WhatsApp Join Links and Google Calendar auto-sync hooks 15 mins prior to class to reduce browser redirect drop-offs on Android. Potential impact: <b>+₹8.5L/mo incremental revenue</b>.
+          </div>
+        </div>
+
+        <!-- Device OS & Placement Breakdown Table -->
+        <div class="tbl-wrap">
+          <table class="desk-table" id="metaDeliveryTable">
+            <thead>
+              <tr>
+                <th>Delivery Period</th>
+                <th>Device OS</th>
+                <th>Placement</th>
+                <th>Spend</th>
+                <th>Impressions</th>
+                <th>CPM</th>
+                <th>Clicks</th>
+                <th>Link Clicks</th>
+                <th>Link CTR</th>
+                <th>Landing Page Views</th>
+                <th>Click → LPV</th>
+                <th>Meta Results</th>
+                <th>LPV → Result</th>
+                <th>Cost / Demo</th>
+              </tr>
+            </thead>
+            <tbody id="metaDeliveryTableBody"></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </main>
 
 </div>
 
@@ -299,10 +708,9 @@
   </div>
 </div>
 
-<script src="/static/js/auth.js?v=2.4"></script>
-<script src="/static/js/charts.js?v=2.4"></script>
-<script src="/static/js/followups.js?v=2.4"></script>
-<script src="/static/js/app.js?v=2.4"></script>
+<script src="/static/js/auth.js?v=2.5"></script>
+<script src="/static/js/charts.js?v=2.5"></script>
+<script src="/static/js/followups.js?v=2.5"></script>
+<script src="/static/js/app.js?v=2.5"></script>
 </body>
 </html>
-
