@@ -19,6 +19,9 @@ class Settings(BaseSettings):
     
     # Read-Only Safety Enforcer
     DB_READ_ONLY: bool = Field(default=True, validation_alias=AliasChoices("DB_READ_ONLY", "READ_ONLY"))
+    # Seconds to wait for a single statement's result. The web app keeps the
+    # default; the nightly pipeline raises it for the long cache-rebuild CALL.
+    DB_READ_TIMEOUT: int = Field(default=120, validation_alias=AliasChoices("DB_READ_TIMEOUT"))
     
     # Direct Meta Marketing Graph API Settings
     META_ACCESS_TOKEN: str = Field(default="", validation_alias=AliasChoices("META_ACCESS_TOKEN", "META_API_KEY", "FB_ACCESS_TOKEN"))

@@ -135,7 +135,11 @@ class CohortCacheSyncEngine:
 
         sync_sql = text("CALL refresh_cohort_cache_all(:history_from);")
 
-        with engine.begin() as conn:
+        # The procedure does its own DELETE + INSERT per cohort window. Run it in
+        # AUTOCOMMIT so each window commits on its own instead of the whole
+        # rebuild sitting in one long transaction (undo-log bloat, held locks),
+        # and so completed windows survive if a later one fails.
+        with engine.connect().execution_options(isolation_level="AUTOCOMMIT") as conn:
             res = conn.execute(sync_sql, {"history_from": history_from})
             rows_affected = res.rowcount if hasattr(res, 'rowcount') and res.rowcount > 0 else 1
 

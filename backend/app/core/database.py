@@ -34,7 +34,7 @@ def _get_raw_connection():
         "database": raw_db,
         "charset": "utf8mb4",
         "connect_timeout": 15,
-        "read_timeout": 120,
+        "read_timeout": settings.DB_READ_TIMEOUT,
     }
     if socket_path and socket_path.lower() not in ["none", "false", "disabled", "tcp"]:
         kwargs["unix_socket"] = socket_path.strip()

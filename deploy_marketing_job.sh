@@ -91,7 +91,7 @@ args_arr=(
   "--cpu" "1"
   "--memory" "2Gi"
   # "^;^" makes ';' the pair separator so META_AD_ACCOUNT_IDS can contain commas
-  "--set-env-vars" "^;^DB_SOCKET=/cloudsql/${CLOUD_SQL_INSTANCE};DB_USER=admin;DB_NAME=production;DB_READ_ONLY=false;TZ=Asia/Kolkata;META_API_VERSION=v20.0;META_AD_ACCOUNT_IDS=act_946867895869898,act_1513945912301435;COHORT_CACHE_HISTORY_START=2026-08-07"
+  "--set-env-vars" "^;^DB_SOCKET=/cloudsql/${CLOUD_SQL_INSTANCE};DB_USER=admin;DB_NAME=production;DB_READ_ONLY=false;TZ=Asia/Kolkata;META_API_VERSION=v20.0;META_AD_ACCOUNT_IDS=act_946867895869898,act_1513945912301435;COHORT_CACHE_HISTORY_START=2026-08-07;DB_READ_TIMEOUT=1800"
 )
 
 run gcloud "${args_arr[@]}"
