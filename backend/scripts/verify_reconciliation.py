@@ -27,6 +27,7 @@ for p in [ROOT_DIR, BACKEND_DIR]:
     if p not in sys.path:
         sys.path.insert(0, p)
 
+from backend.app.core.config import settings
 from backend.app.core.database import engine, check_db_connection
 from backend.app.core.audit_logger import audit_logger, AuditCategory, AuditLevel
 from sqlalchemy import text
@@ -59,14 +60,26 @@ class ReconciliationEngine:
             raw_spend = float(row[0]) if row else 0.0
             cache_spend = float(row[1]) if row else 0.0
 
+        # The two figures come from different feeds today (Graph API staging vs
+        # legacy facebookads), so compare on a percentage tolerance, not cents.
         diff = abs(raw_spend - cache_spend)
-        passed = diff < 0.01
+        base = max(raw_spend, cache_spend)
+        variance_pct = (diff / base * 100.0) if base > 0 else 0.0
+        tolerance_pct = float(settings.RECONCILIATION_SPEND_TOLERANCE_PCT)
+        passed = variance_pct <= tolerance_pct
+        logger.info(
+            f"Spend reconciliation: raw_meta_ads_delivery={raw_spend:,.2f} "
+            f"cohort_detail_cache={cache_spend:,.2f} variance={variance_pct:.2f}% "
+            f"(tolerance {tolerance_pct:.1f}%) -> {'PASS' if passed else 'FAIL'}"
+        )
 
         return {
             "passed": passed,
             "raw_spend": round(raw_spend, 2),
             "cache_spend": round(cache_spend, 2),
-            "variance": round(diff, 2)
+            "variance": round(diff, 2),
+            "variance_pct": round(variance_pct, 2),
+            "tolerance_pct": tolerance_pct
         }
 
     def check_unmapped_taxonomy_ratio(self, date_from: str, date_to: str, threshold_pct: float = 2.0) -> Dict[str, Any]:

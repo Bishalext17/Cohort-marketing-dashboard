@@ -28,6 +28,17 @@ class Settings(BaseSettings):
     META_AD_ACCOUNT_IDS: str = Field(default="", validation_alias=AliasChoices("META_AD_ACCOUNT_IDS", "META_ACCOUNTS", "FB_ACCOUNT_IDS"))
     META_API_VERSION: str = Field(default="v20.0")
 
+    # Nightly pipeline behaviour
+    # Stage 3 (reconciliation) only aborts the run when strict mode is on; the
+    # current spend sources (raw_meta_ads_delivery vs legacy facebookads) are
+    # different feeds and are not expected to match exactly yet.
+    RECONCILIATION_STRICT: bool = Field(default=False, validation_alias=AliasChoices("RECONCILIATION_STRICT"))
+    RECONCILIATION_SPEND_TOLERANCE_PCT: float = Field(default=5.0, validation_alias=AliasChoices("RECONCILIATION_SPEND_TOLERANCE_PCT"))
+    # Stage 4 flushes the *web service's* cache over HTTP; the job's own process
+    # has no cache worth clearing. Unset BACKEND_BASE_URL -> stage is skipped.
+    BACKEND_BASE_URL: str = Field(default="", validation_alias=AliasChoices("BACKEND_BASE_URL"))
+    PIPELINE_SERVICE_TOKEN: str = Field(default="", validation_alias=AliasChoices("PIPELINE_SERVICE_TOKEN"))
+
     # JWT Authentication Settings
     JWT_SECRET_KEY: str = Field(default="bambinos-cohort-secret-jwt-key-2026-production-secure-random", validation_alias=AliasChoices("JWT_SECRET_KEY", "SECRET_KEY"))
     JWT_ALGORITHM: str = Field(default="HS256")

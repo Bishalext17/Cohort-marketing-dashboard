@@ -7,6 +7,7 @@ from backend.app.api.v1.metadata import router as metadata_router
 from backend.app.api.v1.devices import router as devices_router
 from backend.app.api.v1.followups import router as followups_router
 from backend.app.api.v1.cache import router as cache_router
+from backend.app.api.v1.internal import router as internal_router
 from backend.app.api.v1.audit import router as audit_router
 
 # v14 Production Standard Routers
@@ -25,6 +26,9 @@ api_v1_router.include_router(catalog_router)
 api_v1_router.include_router(revenue_router)
 api_v1_router.include_router(analytics_router)
 api_v1_router.include_router(operations_router)
+
+# Service-token protected (nightly pipeline -> web service); no user JWT
+api_v1_router.include_router(internal_router)
 
 # Protected Analytics & Query Endpoints
 protected_dependency = [Depends(get_current_user)]

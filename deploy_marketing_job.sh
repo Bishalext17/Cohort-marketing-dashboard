@@ -82,7 +82,7 @@ args_arr=(
   "--region" "$REGION"
   "--project" "$PROJECT"
   "--set-cloudsql-instances" "$CLOUD_SQL_INSTANCE"
-  "--set-secrets" "DB_PASS=marketing-db-pass:latest,META_ACCESS_TOKEN=metaAccessToken:latest"
+  "--set-secrets" "DB_PASS=marketing-db-pass:latest,META_ACCESS_TOKEN=metaAccessToken:latest,PIPELINE_SERVICE_TOKEN=marketing-pipeline-token:latest"
   "--network" "$NETWORK"
   "--subnet" "$SUBNET"
   "--vpc-egress" "$VPC_EGRESS"
@@ -91,7 +91,7 @@ args_arr=(
   "--cpu" "1"
   "--memory" "2Gi"
   # "^;^" makes ';' the pair separator so META_AD_ACCOUNT_IDS can contain commas
-  "--set-env-vars" "^;^DB_SOCKET=/cloudsql/${CLOUD_SQL_INSTANCE};DB_USER=admin;DB_NAME=production;DB_READ_ONLY=false;TZ=Asia/Kolkata;META_API_VERSION=v20.0;META_AD_ACCOUNT_IDS=act_946867895869898,act_1513945912301435;COHORT_CACHE_HISTORY_START=2026-08-07;DB_READ_TIMEOUT=1800"
+  "--set-env-vars" "^;^DB_SOCKET=/cloudsql/${CLOUD_SQL_INSTANCE};DB_USER=admin;DB_NAME=production;DB_READ_ONLY=false;TZ=Asia/Kolkata;META_API_VERSION=v20.0;META_AD_ACCOUNT_IDS=act_946867895869898,act_1513945912301435;COHORT_CACHE_HISTORY_START=2026-08-07;DB_READ_TIMEOUT=1800;RECONCILIATION_STRICT=false;BACKEND_BASE_URL=${BACKEND_BASE_URL:-https://cohort.bambinos.live}"
 )
 
 run gcloud "${args_arr[@]}"

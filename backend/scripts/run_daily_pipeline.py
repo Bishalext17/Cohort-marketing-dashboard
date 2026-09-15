@@ -30,7 +30,7 @@ for p in [ROOT_DIR, BACKEND_DIR]:
 from backend.scripts.ingest_meta_direct import MetaDirectIngestionEngine
 from backend.scripts.sync_cohort_cache import CohortCacheSyncEngine
 from backend.scripts.verify_reconciliation import ReconciliationEngine
-from backend.app.services.cache_manager import cache_manager
+from backend.app.core.config import settings
 from backend.app.core.audit_logger import audit_logger, AuditCategory, AuditLevel
 
 logging.basicConfig(
@@ -38,6 +38,38 @@ logging.basicConfig(
     format="%(asctime)s [%(levelname)s] [master_pipeline] %(message)s"
 )
 logger = logging.getLogger("run_daily_pipeline")
+
+
+def flush_backend_cache(dry_run: bool = False) -> bool:
+    """
+    Ask the running web service to drop its in-memory query cache. The job runs
+    in its own container, so clearing a local cache object here would do
+    nothing for the dashboard. Failures are logged, never fatal: the data is
+    already in the database and the web cache expires on its own TTL.
+    """
+    base_url = (settings.BACKEND_BASE_URL or "").rstrip("/")
+    if not base_url:
+        logger.warning("BACKEND_BASE_URL not set; skipping web cache flush (entries expire by TTL).")
+        return False
+    if not settings.PIPELINE_SERVICE_TOKEN:
+        logger.warning("PIPELINE_SERVICE_TOKEN not set; skipping web cache flush.")
+        return False
+    if dry_run:
+        logger.info(f"[DRY-RUN] Would POST {base_url}{settings.API_V1_STR}/internal/cache/clear")
+        return True
+
+    import requests
+    url = f"{base_url}{settings.API_V1_STR}/internal/cache/clear"
+    try:
+        resp = requests.post(url, headers={"X-Pipeline-Token": settings.PIPELINE_SERVICE_TOKEN}, timeout=20)
+        if resp.ok:
+            cleared = resp.json().get("cleared_count", "?")
+            logger.info(f"Flushed {cleared} cached entries on {base_url}. REST endpoints will serve fresh data.")
+            return True
+        logger.warning(f"Web cache flush returned HTTP {resp.status_code}: {resp.text[:200]}")
+    except Exception as e:
+        logger.warning(f"Web cache flush failed: {e}")
+    return False
 
 
 def run_master_pipeline(
@@ -81,13 +113,16 @@ def run_master_pipeline(
     reconcile_engine = ReconciliationEngine(dry_run=dry_run)
     reconcile_res = reconcile_engine.run_all_checks(date_from=date_from, date_to=date_to)
     if reconcile_res["status"] != "PASSED":
-        logger.error("❌ Stage 3 Failed: Discrepancy detected in reconciliation.")
-        return False
+        if settings.RECONCILIATION_STRICT:
+            logger.error("❌ Stage 3 Failed: Discrepancy detected in reconciliation (RECONCILIATION_STRICT=true).")
+            return False
+        # Reconciliation is a quality report; a mismatch must not stop the
+        # dashboard from being refreshed with the data that did load.
+        logger.warning("⚠️ Stage 3: reconciliation reported discrepancies; continuing (RECONCILIATION_STRICT=false).")
 
     # ── STAGE 4: CACHE INVALIDATION ──────────────────────────────────────────
     logger.info("\n▶ STAGE 4/4: Flushing Backend Query Cache...")
-    cleared_entries = cache_manager.clear()
-    logger.info(f"Flushed {cleared_entries} cached entries from memory. REST endpoints will serve fresh data.")
+    flush_backend_cache(dry_run=dry_run)
 
     total_sec = round(time.time() - start_total, 2)
     logger.info("\n" + "=" * 70)
